@@ -1,59 +1,61 @@
 import gspread
-from google.oauth2.service_account import Credentials
 import os
 import re
 from datetime import datetime
-from .constants import SCOPES, CREDENTIALS_FILE, SHEET_ID
 
-print(f"🔄 Инициализация Google Sheets...")
+# --- ВАЖНОЕ ИЗМЕНЕНИЕ ---
+# Мы импортируем уже авторизованного клиента (gc) из constants.py
+# Это работает и на Mac (через файл), и на Koyeb (через переменную)
+try:
+    from pligrim_bot.config.constants import gc
+except ImportError:
+    # Если вдруг не сработал абсолютный импорт, пробуем относительный
+    from .constants import gc
+
+print(f"🔄 Инициализация настроек Google Sheets...")
 
 # Глобальные переменные
-_client = None
-_spreadsheet = None
+# Присваиваем глобальному клиенту уже готовое подключение
+_client = gc
+client = gc 
+
 ALL_SHEETS = {}
 PALM_SHEETS = {}
 
 def get_google_client():
-    """Создает и возвращает авторизованный клиент Google Sheets"""
+    """
+    Возвращает авторизованный клиент Google Sheets.
+    Берет его из constants.py, где он уже инициализирован.
+    """
     global _client
-    if _client is not None:
-        return _client
-
-    try:
-        if not os.path.exists(CREDENTIALS_FILE):
-            raise FileNotFoundError(f"Credentials file not found: {CREDENTIALS_FILE}")
-
-        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=SCOPES)
-        _client = gspread.authorize(creds)
-        print("✅ Google Sheets клиент инициализирован")
-        return _client
-    except Exception as e:
-        print(f"❌ Ошибка инициализации Google клиента: {e}")
+    if _client is None:
+        print("❌ Ошибка: Клиент Google не был инициализирован в constants.py")
         return None
-
-# Создаем глобальный клиент для экспорта
-client = get_google_client()
+    return _client
 
 def get_all_accessible_sheets():
     """АВТОМАТИЧЕСКИ получает ВСЕ таблицы, доступные service account"""
-    global client
-    if not client:
-        client = get_google_client()
+    # Используем глобального клиента (gc)
+    current_client = get_google_client()
 
-    if not client:
+    if not current_client:
         print("❌ Google Sheets клиент не инициализирован")
         return {}
 
     try:
-        all_sheets = client.openall()
+        # Получаем список всех таблиц
+        all_sheets = current_client.openall()
         sheets_map = {}
 
         for sheet in all_sheets:
             sheets_map[sheet.title] = sheet.id
 
         print(f"✅ Найдено таблиц: {len(sheets_map)}")
-        for name in sheets_map.keys():
+        # Выводим только первые 5, чтобы не засорять логи, или все если нужно
+        for name in list(sheets_map.keys())[:10]:
             print(f"   📄 {name}")
+        if len(sheets_map) > 10:
+            print(f"   ... и еще {len(sheets_map) - 10}")
 
         return sheets_map
     except Exception as e:
@@ -85,27 +87,27 @@ def detect_pilgrim_months(sheets):
 
     return pilgrim_sheets
 
-# ДИНАМИЧЕСКОЕ ПОЛУЧЕНИЕ ТАБЛИЦ ПРИ ЗАПУСКЕ
-print("🔄 Получаем доступные таблицы...")
-ALL_SHEETS = get_all_accessible_sheets()
-PALM_SHEETS = detect_pilgrim_months(ALL_SHEETS)
-
-print(f"🎯 Итог: найдено {len(PALM_SHEETS)} таблиц паломников")
+# --- ДИНАМИЧЕСКОЕ ПОЛУЧЕНИЕ ТАБЛИЦ ПРИ ЗАПУСКЕ ---
+if client:
+    print("🔄 Получаем доступные таблицы...")
+    ALL_SHEETS = get_all_accessible_sheets()
+    PALM_SHEETS = detect_pilgrim_months(ALL_SHEETS)
+    print(f"🎯 Итог: найдено {len(PALM_SHEETS)} таблиц паломников")
+else:
+    print("⚠️ Клиент не готов, пропускаем загрузку таблиц.")
 
 def refresh_sheets():
     """Обновляет список таблиц"""
-    global ALL_SHEETS, PALM_SHEETS, client
+    global ALL_SHEETS, PALM_SHEETS
     ALL_SHEETS = get_all_accessible_sheets()
     PALM_SHEETS = detect_pilgrim_months(ALL_SHEETS)
     print(f"🔄 Обновлено! Доступно таблиц паломников: {len(PALM_SHEETS)}")
 
 def get_worksheet(month_key: str, sheet_name: str):
     """Получает конкретный лист из таблицы по месяцу и названию листа"""
-    global client
-    if not client:
-        client = get_google_client()
+    current_client = get_google_client()
 
-    if not client:
+    if not current_client:
         return None
 
     try:
@@ -115,22 +117,15 @@ def get_worksheet(month_key: str, sheet_name: str):
             return None
 
         spreadsheet_id = PALM_SHEETS[month_key]
-        spreadsheet = client.open_by_key(spreadsheet_id)
+        spreadsheet = current_client.open_by_key(spreadsheet_id)
 
         # Пробуем найти лист
         try:
             worksheet = spreadsheet.worksheet(sheet_name)
-            print(f"✅ Лист найден: {sheet_name} в {month_key}")
+            # print(f"✅ Лист найден: {sheet_name} в {month_key}") # Можно скрыть спам в логах
             return worksheet
         except Exception as e:
             print(f"❌ Лист {sheet_name} не найден в {month_key}: {e}")
-
-            # Покажем доступные листы
-            worksheets = spreadsheet.worksheets()
-            print(f"📋 Доступные листы в {month_key}:")
-            for ws in worksheets:
-                print(f"   📄 {ws.title}")
-
             return None
 
     except Exception as e:
