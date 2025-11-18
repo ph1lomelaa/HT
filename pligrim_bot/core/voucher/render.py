@@ -2,8 +2,8 @@ import os
 import uuid
 import re
 from PIL import Image, ImageDraw, ImageFont
-
-from pligrim_bot.config.constants import BBOX, TMP_DIR, TTF_PATH
+from PIL import ImageFont
+from pligrim_bot.config.constants import BBOX, TMP_DIR, TTF_REGULAR, TTF_PATH
 from pligrim_bot.core.parsers.transport_parser import need_train
 
 # Правильные пути к файлам
@@ -182,19 +182,21 @@ def plural_nights(n) -> str:
 
 
 def font(sz):
-    """Загружает шрифт"""
+    """Загружает основной шрифт Montserrat Regular"""
     try:
-        return ImageFont.truetype(TTF_PATH, sz)
-    except:
+        return ImageFont.truetype(TTF_REGULAR, sz)
+    except Exception:
         return ImageFont.load_default()
+
 
 
 def load_font(size):
     """Загружает шрифт (альтернативная версия)"""
     try:
-        return ImageFont.truetype(TTF_PATH, size)
+        return ImageFont.truetype(TTF_REGULAR, size)
     except Exception:
         return ImageFont.load_default()
+
 
 
 def build_voucher_pdf(page1_png: str, city1: str | None, transfer_raw: str | None,
