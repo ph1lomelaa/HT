@@ -146,8 +146,13 @@ DATE_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})\b")
 
 # Статические файлы
 BG_PATH   = "v1.png"              # фон ваучера (первая страница)
-TTF_PATH   = "fonts/Montserrat/static/Montserrat-Regular.ttf"
-
+TTF_PATH = os.path.join(
+    PROJECT_ROOT,
+    "fonts",
+    "Montserrat",
+    "static",
+    "Montserrat-Regular.ttf",
+)
 BG_UAE_MED = "uae-med.png"           # 2-я страница (первый город Медина)
 BG_UAE_MEC = "uae-mec.png"           # 2-я страница (первый город Мекка)
 BG_JED_MED_TRAIN = "jed-med-train.png"   # 2-я страница при поезде (Медина)
