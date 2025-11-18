@@ -4,7 +4,7 @@ from datetime import datetime
 from pligrim_bot.config.constants import TIME_RE, FLIGHT_RE
 from pligrim_bot.core.utils.date_utils import norm_date_str, norm_date
 from pligrim_bot.core.utils.validation import *
-from pligrim_bot.core.voucher.render import *
+from pligrim_bot.core.voucher.render import plural_nights
 
 
 def base_payload_from(voucher: dict) -> dict:
