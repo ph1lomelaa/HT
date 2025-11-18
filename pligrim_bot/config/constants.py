@@ -27,15 +27,32 @@ SCOPES = [
 ]
 SHEET_ID = "1sUo_1riAue-l0H-tKAn1EHy8XEHy3SBxc7jmZQqGwx4"
 
-print(f"📍 CREDENTIALS_FILE: {CREDENTIALS_FILE}")
+# 1. Пробуем получить ключи из переменной окружения (для сервера Koyeb)
+json_config = os.getenv("GOOGLE_CREDS_JSON")
 
-# Проверка существования credentials файла
-if not os.path.exists(CREDENTIALS_FILE):
-    print(f"❌ Файл credentials не найден: {CREDENTIALS_FILE}")
+if json_config:
+    print("✅ (Koyeb) Найдены ключи в переменной окружения")
+    # Превращаем текст из переменной обратно в словарь
+    creds_dict = json.loads(json_config)
+    # Создаем объект доступов из словаря
+    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
 else:
-    print(f"✅ Файл credentials найден: {CREDENTIALS_FILE}")
+    # 2. Если переменной нет, ищем файл на диске (для локального запуска)
+    CREDENTIALS_FILE = os.path.join(PROJECT_ROOT, "credentials", "hickmet-premium-bot-601501356d30.json")
+    print(f"📍 (Local) Ищем файл ключей: {CREDENTIALS_FILE}")
+
+    if os.path.exists(CREDENTIALS_FILE):
+        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=SCOPES)
+    else:
+        # Если нет ни переменной, ни файла — останавливаем программу, чтобы не мучиться
+        raise FileNotFoundError("❌ ОШИБКА: Не найдены ключи Google! Добавьте файл локально или переменную GOOGLE_CREDS_JSON на сервер.")
+
+# Авторизуемся в gspread прямо здесь
+gc = gspread.authorize(creds)
+
 
 # Инициализация бота
+# (Совет: Токен бота тоже лучше брать из переменных, но пока оставим так)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
