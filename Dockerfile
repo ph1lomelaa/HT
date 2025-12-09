@@ -6,13 +6,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# --- ИСПРАВЛЕНИЕ: Устанавливаем системные библиотеки для gssapi ---
+# --- ВАЖНО: Устанавливаем системные библиотеки (Git, GCC и др) ---
 RUN apt-get update && apt-get install -y \
     gcc \
     libkrb5-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем зависимости Python
+# Устанавливаем зависимости
+# Обратите внимание: путь к файлу внутри папки pligrim_bot
 COPY pligrim_bot/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
