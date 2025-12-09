@@ -23,8 +23,11 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# Путь к файлу (на случай локального запуска)
-CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "creds.json")
+CREDENTIALS_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+    "credentials", 
+    "hickmet-premium-bot-601501356d30.json"
+)
 # 1. Пробуем получить ключи из переменной окружения (для сервера Koyeb)
 json_config = os.getenv("GOOGLE_CREDS_JSON")
 
