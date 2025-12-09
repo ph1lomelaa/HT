@@ -23,7 +23,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# Имя файла оставим для локальных тестов, но использовать его будем аккуратно
+# Путь к файлу (на случай локального запуска)
 CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "creds.json")
 # 1. Пробуем получить ключи из переменной окружения (для сервера Koyeb)
 json_config = os.getenv("GOOGLE_CREDS_JSON")
