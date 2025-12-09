@@ -13,7 +13,7 @@ print(f"📍 PROJECT_ROOT: {PROJECT_ROOT}")
 
 # Основные настройки
 # Основные настройки
-API_TOKEN = "7752089122:AAERQSfnEH-aMMehz8jnWhG9HbbcVpDQz7k"  # ← Этот токен неверный
+API_TOKEN = "8407160704:AAHgGxt5hW1J00SJnW8AFgPXRpIkZJU_8iU"  # ← Этот токен неверный
 TMP_DIR = os.path.join(PROJECT_ROOT, "tmp")
 os.makedirs(TMP_DIR, exist_ok=True)
 
