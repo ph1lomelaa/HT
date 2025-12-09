@@ -13,20 +13,18 @@ print(f"📍 PROJECT_ROOT: {PROJECT_ROOT}")
 
 # Основные настройки
 # Основные настройки
-API_TOKEN = "8407160704:AAHgGxt5hW1J00SJnW8AFgPXRpIkZJU_8iU"  # ← Этот токен неверный
+API_TOKEN = "7752089122:AAERQSfnEH-aMMehz8jnWhG9HbbcVpDQz7k"  # ← Этот токен неверный
 TMP_DIR = os.path.join(PROJECT_ROOT, "tmp")
 os.makedirs(TMP_DIR, exist_ok=True)
 
-# Google Sheets - ПРАВИЛЬНЫЙ ПУТЬ
-CREDENTIALS_FILE = os.path.join(PROJECT_ROOT, "credentials", "hickmet-premium-bot-601501356d30.json")
 # Google Sheets - расширенные права доступа
-CREDENTIALS_FILE = os.path.join(PROJECT_ROOT, "credentials", "hickmet-premium-bot-601501356d30.json")
 SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",  # ← Чтение и запись
-    "https://www.googleapis.com/auth/drive.readonly"  # ← Доступ к списку файлов
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
 ]
-SHEET_ID = "1sUo_1riAue-l0H-tKAn1EHy8XEHy3SBxc7jmZQqGwx4"
 
+# Имя файла оставим для локальных тестов, но использовать его будем аккуратно
+CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "creds.json")
 # 1. Пробуем получить ключи из переменной окружения (для сервера Koyeb)
 json_config = os.getenv("GOOGLE_CREDS_JSON")
 
