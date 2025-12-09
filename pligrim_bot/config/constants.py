@@ -29,7 +29,7 @@ CREDENTIALS_FILE = os.path.join(
     "hickmet-premium-bot-601501356d30.json"
 )
 # 1. Пробуем получить ключи из переменной окружения (для сервера Koyeb)
-json_config = os.getenv("GOOGLE_CREDS_JSON")
+json_config = os.getenv("GOOGLE_CREDS")
 
 if json_config:
     print("✅ (Koyeb) Найдены ключи в переменной окружения")
