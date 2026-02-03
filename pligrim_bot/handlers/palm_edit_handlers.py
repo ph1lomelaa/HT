@@ -82,6 +82,7 @@ def edit_voucher_fields_kb(chat_id: int, group_idx: int) -> InlineKeyboardMarkup
                 row.append(InlineKeyboardButton(text=txt, callback_data=f"edit_field:{group_idx}:{key}"))
         rows.append(row)
 
+    rows.append([InlineKeyboardButton(text="Отправить обновленный ваучер", callback_data=f"send_edit:{group_idx}")])
     rows.append([InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="palm_edit_menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -142,9 +143,9 @@ async def send_one_voucher_for_group(
 
     # Собираем текст
     caption = (
-        f" {pkg_title}\n"
-        f" {room_label} · {pax_count} pax\n"
-        f" {names_str}"
+        f"📄 {pkg_title}\n"
+        f"🛏 {room_label} · {pax_count} pax\n"
+        f"👥 {names_str}"
     )
 
     # 4. Отправляем документ
@@ -350,13 +351,8 @@ async def process_edit_value(message: types.Message, state: FSMContext):
     # Обновляем сессию
     EDIT_SESSIONS[chat_id]["voucher"] = voucher
 
-    await message.answer(" Значение обновлено!")
-
-    # Пересоздаем и отправляем обновленный ваучер
-    await regenerate_and_send_voucher(message, chat_id, group_idx)
-
     await message.answer(
-        "Можете изменить еще поля этого ваучера:",
+        "✅ Значение обновлено! Можно изменить еще поля или отправить обновленный ваучер.",
         reply_markup=edit_voucher_fields_kb(chat_id, group_idx)
     )
 
@@ -383,11 +379,29 @@ async def regenerate_and_send_voucher(message: types.Message, chat_id: int, grou
 
     group = groups[group_idx - 1]
 
-    await message.answer(f" Пересоздаю ваучер #{group_idx}...")
+    await message.answer(f"🔄 Пересоздаю ваучер #{group_idx}...")
 
     # Отправляем обновленный ваучер
     await send_one_voucher_for_group(
         message, pkg_title, voucher, base, group, group_idx, bg_index=bg_index
     )
 
-    await message.answer(" Обновленный ваучер отправлен!")
+    await message.answer("✅ Обновленный ваучер отправлен!")
+
+
+@dp.callback_query(F.data.startswith("send_edit:"))
+async def send_updated_voucher(callback: CallbackQuery):
+    try:
+        _, group_idx_str = callback.data.split(":", 1)
+        group_idx = int(group_idx_str)
+    except ValueError:
+        await callback.answer("Ошибка формата", show_alert=True)
+        return
+
+    chat_id = callback.message.chat.id
+    await regenerate_and_send_voucher(callback.message, chat_id, group_idx)
+    await callback.message.answer(
+        "Можете продолжить редактировать этот ваучер или выбрать другой:",
+        reply_markup=edit_voucher_fields_kb(chat_id, group_idx)
+    )
+    await callback.answer()

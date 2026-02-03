@@ -16,7 +16,7 @@ async def palm_restart(callback: CallbackQuery):
     chat_id = callback.message.chat.id
     EDIT_SESSIONS.pop(chat_id, None)
 
-    text = " Выберите месяц для паломников:"
+    text = "🕋 Выберите месяц для паломников:"
 
     # если сообщение было текстовым – редактируем, иначе шлём новое
     if callback.message.text:
@@ -31,4 +31,3 @@ async def palm_restart(callback: CallbackQuery):
         )
 
     await callback.answer()
-

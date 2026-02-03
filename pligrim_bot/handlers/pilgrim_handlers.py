@@ -116,7 +116,7 @@ async def on_background_selected(call: CallbackQuery):
 @dp.callback_query(F.data == "get_month_buttons")
 async def show_month_buttons(callback: CallbackQuery):
     await callback.message.edit_text(
-        " Выберите месяц для паломников:",
+        "🕋 Выберите месяц для паломников:",
         reply_markup=get_palm_month_buttons()
     )
     await callback.answer()
@@ -153,7 +153,7 @@ async def palm_pkg_clicked(callback: types.CallbackQuery):
         "page2_png": pick_page2_bg(voucher.get("city1"), voucher.get("transfer"))
     }
 
-    header = f" <b>Пакет:</b> {pkg_title}\n <b>Лист:</b> {ws.title}\n\n"
+    header = f"📦 <b>Пакет:</b> {pkg_title}\n📄 <b>Лист:</b> {ws.title}\n\n"
 
     # Отправляем КРАСИВОЕ превью
     await callback.message.answer(
@@ -175,7 +175,7 @@ async def palm_sheet_selected(callback: types.CallbackQuery):
             return
 
         kb = build_palm_packages_kb(month_key, ws_title, packages)
-        await callback.message.answer(f" Лист: {ws_title}\nВыберите пакет:", reply_markup=kb)
+        await callback.message.answer(f"📄 Лист: {ws_title}\nВыберите пакет:", reply_markup=kb)
         await callback.answer()
     except Exception as e:
         print(f"Error: {e}")
@@ -187,7 +187,7 @@ async def palm_month_selected(callback: CallbackQuery):
         month_key = callback.data.split(":", 1)[1]
         keyboard, all_titles = get_palm_sheet_buttons(month_key, show_all=False)
         USER_SHEETS_CACHE[callback.from_user.id] = all_titles
-        await callback.message.edit_text(f" Месяц: {month_key}\nВыберите лист:", reply_markup=keyboard)
+        await callback.message.edit_text(f"🕋 Месяц: {month_key}\nВыберите лист:", reply_markup=keyboard)
         await callback.answer()
     except Exception:
         await callback.answer(" Ошибка")
@@ -202,7 +202,7 @@ async def palm_show_all_sheets(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "palm_back_to_months")
 async def palm_back_to_months(callback: CallbackQuery):
-    await callback.message.edit_text(" Выберите месяц:", reply_markup=get_palm_month_buttons())
+    await callback.message.edit_text("🕋 Выберите месяц:", reply_markup=get_palm_month_buttons())
     await callback.answer()
 
 
@@ -220,7 +220,7 @@ def preview_text(voucher: dict) -> str:
         h = hotel or "—"
         d = dates or "—"
         ch = checkin or "—"
-        return f" <b>{c}</b>\n    Отель: {h}\n    Даты: {d}\n   ⏰ Check-in: {ch}"
+        return f"📍 <b>{c}</b>\n   🏨 Отель: {h}\n   📅 Даты: {d}\n   ⏰ Check-in: {ch}"
 
     p1 = line(voucher.get("city1"), voucher.get("hotel1"), voucher.get("dates1"), voucher.get("checkin1"), 1)
     p2 = line(voucher.get("city2"), voucher.get("hotel2"), voucher.get("dates2"), voucher.get("checkin2"), 2)
@@ -232,15 +232,15 @@ def preview_text(voucher: dict) -> str:
     service = voucher.get("service") or "—"
 
     text = (
-        " <b>ПРОВЕРЬТЕ ДАННЫЕ ПЕРЕД ГЕНЕРАЦИЕЙ:</b>\n\n"
+        "📋 <b>ПРОВЕРЬТЕ ДАННЫЕ ПЕРЕД ГЕНЕРАЦИЕЙ:</b>\n\n"
         f"{p1}\n\n"
         f"{p2}\n\n"
-        f" <b>Питание:</b> {meal}\n"
-        f" <b>Трансфер:</b> {transfer}\n"
-        f" <b>Гид:</b> {guide}\n"
-        f" <b>Экскурсии:</b> {excursions}\n"
-        f" <b>Тех. гид:</b> {tech_guide}\n"
-        f" <b>Сервис:</b> {service}"
+        f"🍽 <b>Питание:</b> {meal}\n"
+        f"🚐 <b>Трансфер:</b> {transfer}\n"
+        f"🧭 <b>Гид:</b> {guide}\n"
+        f"🗺 <b>Экскурсии:</b> {excursions}\n"
+        f"📞 <b>Тех. гид:</b> {tech_guide}\n"
+        f"🛡 <b>Сервис:</b> {service}"
     )
 
     if not voucher.get("city1") and not voucher.get("city2"):
