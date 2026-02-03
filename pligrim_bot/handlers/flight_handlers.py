@@ -95,7 +95,7 @@ async def start_handler(message: types.Message):
         ]
     )
     await message.answer(
-        "Ассаляму алейкум!\n\nЧто вы хотите сделать?",
+        "🕋 Ассаляму алейкум!\n\nЧто вы хотите сделать?",
         reply_markup=keyboard
     )
 
