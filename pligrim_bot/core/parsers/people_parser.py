@@ -10,9 +10,10 @@ def is_guest_row(row: list[str], cols: dict) -> bool:
     first = get_first(row, cols)
     if not last and not first:
         return False
-    # проверяем только эти два поля, без всего "row"
+    
     if DATE_TOKEN_RX.search(last) or DATE_TOKEN_RX.search(first):
         return False
+    
     low_last, low_first = last.lower(), first.lower()
     if any(tok in low_last for tok in NOISE_TOKENS) or any(tok in low_first for tok in NOISE_TOKENS):
         return False
@@ -76,17 +77,6 @@ def _norm_token(s: str) -> str:
 
 
 def _build_bad_name_sets():
-    """
-    Собираем два множества:
-      BAD_FIO_EXACT    — точные «плохие» имена (MAKKAH, HIKMA, ROTANA и т.п.)
-      BAD_FIO_CONTAINS — подстроки/шаблоны (\" HIKMA 7 DAYS\", \"MAKKAH:\", \"AL ULA\" и т.п.)
-    Всё вытягиваем из:
-      - CITY_ALIASES
-      - CITY_ALIASES_HOTELS
-      - PKG_KIND_ALIASES (типы пакетов)
-      - ROOM_ALIASES (типы номеров)
-      - HOTELS_NAME_HINTS (общие слова типа hotel / отель)
-    """
     bad_exact = set()
     bad_contains = set()
 

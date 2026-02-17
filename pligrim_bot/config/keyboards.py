@@ -219,56 +219,8 @@ def preview_main_kb(cache_id: str) -> InlineKeyboardMarkup:
     ])
 
 
-def edit_fields_kb(cache_id: str) -> InlineKeyboardMarkup:
-    v = PREVIEW_CACHE.get(cache_id, {}).get("voucher", {})
-    c1 = city_ru(v.get("city1") or "")
-    c2 = city_ru(v.get("city2") or "")
-
-    # Если города не указаны, показываем общие кнопки для добавления
-    has_city1 = bool(v.get("city1"))
-    has_city2 = bool(v.get("city2"))
-
-    items = []
-
-    # Кнопки для первого города (всегда показываем)
-    if has_city1:
-        citykey1 = citykey_for_value(v.get("city1"), "1")
-        items.append((f" Отель ({c1})", f"hotel@{citykey1}"))
-        items.append((f" Даты ({c1})", f"dates@{citykey1}"))
-        items.append((f"Чек-ин ({c1})", f"checkin@{citykey1}"))
-    else:
-        items.append((f" Добавить город 1", f"add_city@1"))
-
-    # Кнопки для второго города (всегда показываем)
-    if has_city2:
-        citykey2 = citykey_for_value(v.get("city2"), "2")
-        items.append((f" Отель ({c2})", f"hotel@{citykey2}"))
-        items.append((f" Даты ({c2})", f"dates@{citykey2}"))
-        items.append((f"Чек-ин ({c2})", f"checkin@{citykey2}"))
-    else:
-        items.append((f" Добавить город 2", f"add_city@2"))
-
-    # Остальные сервисные кнопки
-    items.extend([
-        (" Трансфер",   "transfer"),
-        (" Питание",    "meal"),
-        (" Гид",        "guide"),
-        (" Экскурсии",  "excursions"),
-        (" Тех. гид",   "tech_guide"),
-        ("️ Сервис",    "service"),
-    ])
-
-    rows = []
-    for i in range(0, len(items), 2):
-        row = []
-        for j in (i, i+1):
-            if j < len(items):
-                txt, key = items[j]
-                row.append(InlineKeyboardButton(text=txt, callback_data=f"pv_field:{cache_id}:{key}"))
-        rows.append(row)
-
-    rows.append([InlineKeyboardButton(text="⬅️ Назад к превью", callback_data=f"pv_back:{cache_id}")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+# REMOVED: edit_fields_kb - duplicated in preview_handlers.py
+# This function was not being imported or used anywhere
 
 def citykey_for_value(value: str | None, fallback: str) -> str:
     """Определяет ключ города по строке. Если не Медина/Мекка — возвращает fallback."""

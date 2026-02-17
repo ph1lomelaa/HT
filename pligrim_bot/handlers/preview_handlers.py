@@ -218,30 +218,8 @@ async def pv_back(callback: types.CallbackQuery):
     await callback.message.answer(preview_text(data["voucher"]), reply_markup=preview_main_kb(cache_id))
     await callback.answer()
 
-@dp.callback_query(F.data.startswith("pv_send:"))
-async def pv_send(callback: types.CallbackQuery):
-    _, cache_id = callback.data.split(":", 1)
-    data = PREVIEW_CACHE.get(cache_id)
-    if not data:
-        await callback.message.answer("️ Сессия не найдена. Начните заново.")
-        return
-
-    voucher = data["voucher"]
-    pkg_title = data["pkg_title"]
-
-    await callback.message.answer(" Подтверждено. Отправляю ваучеры по группам…")
-    await send_vouchers_for_package(callback.message, pkg_title, voucher)
-    if callback.message.chat.id not in EDIT_SESSIONS:
-        base = base_payload_from(voucher)
-        ppl = voucher.get("people") or {}
-        groups = ppl.get("rooms") or []
-        if not groups:
-            names = ppl.get("flat") or voucher.get("_people_flat") or []
-            groups = [{"kind": "", "people": names}]
-        await start_after_voucher_menu(callback.message, pkg_title, voucher, groups, base)
-
-    PREVIEW_CACHE.pop(cache_id, None)
-    EDIT_STATE.pop(callback.from_user.id, None)
+# REMOVED: Duplicate pv_send handler - the correct one is in pilgrim_handlers.py
+# This old version skipped background selection and is no longer needed
 
 
 
