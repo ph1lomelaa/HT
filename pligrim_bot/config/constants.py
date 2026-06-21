@@ -1,21 +1,18 @@
 from aiogram import Bot, Dispatcher, F
-import gspread
-from google.oauth2.service_account import Credentials
-import json
 import os
 import re
 
+from .app_config import config
+
 # Базовые пути
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # папка config
-PROJECT_ROOT = os.path.dirname(BASE_DIR)  # папка pligrim_bot
+PROJECT_ROOT = str(config.project_root)  # папка pligrim_bot
 print(f" BASE_DIR: {BASE_DIR}")
 print(f" PROJECT_ROOT: {PROJECT_ROOT}")
 
 # Основные настройки
-# Основные настройки
-API_TOKEN = "7752089122:AAERQSfnEH-aMMehz8jnWhG9HbbcVpDQz7k"  # ← Этот токен неверный
-TMP_DIR = os.path.join(PROJECT_ROOT, "tmp")
-os.makedirs(TMP_DIR, exist_ok=True)
+API_TOKEN = config.bot_token
+TMP_DIR = str(config.tmp_dir)
 
 # Google Sheets - расширенные права доступа
 SCOPES = [
@@ -23,33 +20,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-CREDENTIALS_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-    "credentials", 
-    "hickmet-premium-bot-601501356d30.json"
-)
-# 1. Пробуем получить ключи из переменной окружения (для сервера Koyeb)
-json_config = os.getenv("GOOGLE_CREDS")
-
-if json_config:
-    print(" (Koyeb) Найдены ключи в переменной окружения")
-    # Превращаем текст из переменной обратно в словарь
-    creds_dict = json.loads(json_config)
-    # Создаем объект доступов из словаря
-    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-else:
-    # 2. Если переменной нет, ищем файл на диске (для локального запуска)
-    CREDENTIALS_FILE = os.path.join(PROJECT_ROOT, "credentials", "hickmet-premium-bot-601501356d30.json")
-    print(f" (Local) Ищем файл ключей: {CREDENTIALS_FILE}")
-
-    if os.path.exists(CREDENTIALS_FILE):
-        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=SCOPES)
-    else:
-        # Если нет ни переменной, ни файла — останавливаем программу, чтобы не мучиться
-        raise FileNotFoundError(" ОШИБКА: Не найдены ключи Google! Добавьте файл локально или переменную GOOGLE_CREDS_JSON на сервер.")
-
-# Авторизуемся в gspread прямо здесь
-gc = gspread.authorize(creds)
+CREDENTIALS_FILE = str(config.credentials_file)
 
 FONTS_DIR = os.path.join(PROJECT_ROOT, "assets", "fonts", "Montserrat", "static")
 TTF_REGULAR = os.path.join(FONTS_DIR, "Montserrat-Regular.ttf")
@@ -59,7 +30,6 @@ TTF_MEDIUM = os.path.join(FONTS_DIR, "Montserrat-Medium.ttf")
 print(f" REGULAR exists: {os.path.exists(TTF_REGULAR)}   → {TTF_REGULAR}")
 
 # Инициализация бота
-# (Совет: Токен бота тоже лучше брать из переменных, но пока оставим так)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
@@ -296,4 +266,3 @@ NOISE_TOKENS = {
 }
 
 CHILD_RX = re.compile(r'\b(inf(ant)?|chd|child|kid|реб(ён|ен)ок|дет(и|ск))\b', re.I)
-

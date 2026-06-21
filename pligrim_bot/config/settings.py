@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 import os
 import re
 from datetime import datetime
+from .app_config import config
 from .constants import SCOPES, CREDENTIALS_FILE
 
 print(f" Инициализация Google Sheets...")
@@ -22,8 +23,8 @@ def get_google_client():
 
     try:
         creds = None
-        # 1. Читаем переменную с сервера (Koyeb)
-        json_creds = os.getenv("GOOGLE_CREDS")
+        # 1. Читаем JSON из .env или переменных окружения сервера.
+        json_creds = config.google_creds
 
         if json_creds:
             print(" Использую ключи из переменной GOOGLE_CREDS")

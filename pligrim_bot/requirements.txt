@@ -4,3 +4,4 @@ google-auth
 pillow
 requests
 aiohttp
+python-dotenv

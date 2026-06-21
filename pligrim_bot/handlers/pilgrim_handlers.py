@@ -40,6 +40,10 @@ async def on_preview_send_ask_bg(call: CallbackQuery):
     1. Показывает 3 картинки (варианты фона).
     2. Просит нажать 1, 2 или 3.
     """
+    # Telegram ожидает подтверждение callback в течение нескольких секунд.
+    # Подтверждаем нажатие до загрузки и отправки изображений.
+    await call.answer()
+
     try:
         cache_id = call.data.split(":")[1]
 
@@ -62,10 +66,9 @@ async def on_preview_send_ask_bg(call: CallbackQuery):
             "Нажмите кнопку, соответствующую картинке выше:",
             reply_markup=choose_background_kb(cache_id)
         )
-        await call.answer()
     except Exception as e:
         print(f"Error in pv_send: {e}")
-        await call.answer("Произошла ошибка при отправке превью")
+        await call.message.answer("Произошла ошибка при отправке превью")
 
 
 @dp.callback_query(F.data.startswith("sel_bg:"))

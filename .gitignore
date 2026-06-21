@@ -1,4 +1,6 @@
 .venv/
+.env
 __pycache__/
 .DS_Store
-pligrim_bot/credentials/hickmet-premium-bot-601501356d30.json
+pligrim_bot/credentials/*.json
+!pligrim_bot/credentials/.gitkeep

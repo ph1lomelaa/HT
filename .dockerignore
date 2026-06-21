@@ -1,0 +1,9 @@
+.git
+.idea
+.env
+.venv
+.verify-venv
+__pycache__
+*.pyc
+pligrim_bot/credentials/*.json
+pligrim_bot/tmp/*
