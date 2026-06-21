@@ -16,6 +16,14 @@ _spreadsheet = None
 ALL_SHEETS = {}
 PALM_SHEETS = {}
 
+# Временный ручной фильтр для скрытия конкретных таблиц паломников.
+# Формат: "Month YYYY" как в логах detect_pilgrim_months.
+EXCLUDED_PILGRIM_MONTHS = {
+    "February 2026",
+    "December 2025",
+    "January 2026",
+}
+
 def get_google_client():
     global _client
     if _client is not None:
@@ -89,6 +97,10 @@ def detect_pilgrim_months(sheets):
             year = year_match.group(1) if year_match else str(datetime.now().year)
 
             key = f"{month} {year}"
+            if key in EXCLUDED_PILGRIM_MONTHS:
+                print(f" Пропускаю таблицу паломников: {key}")
+                continue
+
             pilgrim_sheets[key] = sheet_id
             print(f" Обнаружена таблица паломников: {key}")
 
