@@ -51,3 +51,7 @@
 .room-fields>.field{min-width:0}
 @media(max-width:760px){.room-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px}.room-fields .people-names textarea{font-size:16px;min-height:126px;padding:12px;line-height:1.7}.room-fields .field input,.room-fields .field select{font-size:16px}.room-fields .hint{line-height:1.7}}
 @media(max-width:370px){.room-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.room-fields .people-names{grid-column:1/-1;grid-row:auto}.room-fields .people-names textarea{height:auto}}
+
+.file-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.file-actions .button{gap:6px}.edit-notice{margin-bottom:22px;text-align:left}
+@media(max-width:760px){.file-item{flex-wrap:wrap}.file-item>span{flex-basis:calc(100% - 40px)}.file-actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:4px}.file-actions .button{font-size:12px;min-height:42px;padding:9px}}

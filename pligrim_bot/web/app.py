@@ -241,6 +241,19 @@ async def retry(key:str,person=Depends(user)):
     await service.retry_delivery(key,person['id']);return {'ok':True}
 
 
+@app.get('/api/jobs/{key}/files/{index}/draft')
+async def edit_document_draft(key:str,index:int,person=Depends(user)):
+    import uuid
+    job=await asyncio.to_thread(service.get_job,key,person['id'])
+    if not job or index<0 or index>=len(job['files']):
+        raise HTTPException(404,'Ваучер не найден или срок редактирования истёк. Выберите пакет заново.')
+    draft=GenerateRequest.model_validate_json(job['payload'])
+    if index>=len(draft.voucher.people.rooms):raise HTTPException(404,'Ваучер не найден')
+    draft.voucher.people.rooms=[draft.voucher.people.rooms[index].model_copy(deep=True)]
+    draft.request_id=uuid.uuid4().hex
+    return draft.model_dump(mode='json')
+
+
 class DownloadLink(BaseModel):
     index:int=Field(default=-1,ge=-1)
 

@@ -2,6 +2,13 @@
 
 Telegram bot for passenger and flight vouchers from Google Sheets.
 
+Staff instructions (Russian, ready to forward): [HICKMET_USER_GUIDE_RU.txt](docs/HICKMET_USER_GUIDE_RU.txt).
+
+Generated PDFs can be individually edited from the result page or the Telegram
+button below each newly sent PDF. The editor loads only that document's room
+from the owner's saved job and creates a new job/PDF, preserving the originals.
+Saved drafts expire with jobs after 24 hours. Editing does not write to Sheets.
+
 ## Local start
 
 Requires Python 3.11 or newer.

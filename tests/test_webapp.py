@@ -35,6 +35,7 @@ def body(flight=False,deliver=False):
 @pytest.fixture
 def client(tmp_path,monkeypatch):
     monkeypatch.setenv('WEB_STATE_DIR',str(tmp_path/'state'));monkeypatch.setenv('ALLOWED_USER_IDS','')
+    monkeypatch.setenv('WEBAPP_URL','https://voucherhickmet.duckdns.org')
     monkeypatch.setattr(web,'_username','hickmet_test_bot')
     from pligrim_bot.core.voucher import render as R
     monkeypatch.setattr(R,'TMP_DIR',str(tmp_path))
@@ -127,6 +128,44 @@ def test_documents_sent_only_to_authenticated_user(client):
     assert job['status']=='done' and job['sent']==1
     assert bot.send_document.call_args.kwargs['chat_id']==101
     assert bot.send_document.call_args.kwargs['caption']=='📄 TEST VOUCHER\n🛏 Двухместный номер · 2 pax\n👥 IVANOV IVAN, PETROVA ANNA'
+    edit_button=bot.send_document.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
+    assert edit_button.text=='Изменить этот ваучер'
+    assert f"edit={job['id']}%3A0" in edit_button.web_app.url
+
+
+def test_edit_one_voucher_preserves_other_rooms_and_original_pdfs(client):
+    login(client)
+    data=body(flight=True)
+    data['voucher']['people']['rooms'].append({'kind':'SGL','people':['SMIRNOV EGOR'],'adults':1})
+    original=wait_job(client,client.post('/api/jobs',json=data).json()['id'])
+    original_pdf=client.get(original['files'][1]['download']).content
+    url=f"/api/jobs/{original['id']}/files/1/draft"
+    draft=client.get(url).json()
+    assert draft['voucher']['people']['rooms']==[data['voucher']['people']['rooms'][1]]
+    assert draft['flight']['outbound']['number']=='DV 499' and draft['background']==1
+    assert draft['request_id']!=data['request_id']
+    draft['voucher']['hotel1']='Individual Hotel'
+    draft['voucher']['meal']='Не включено'
+    draft['deliver_to_chat']=True
+    corrected=wait_job(client,client.post('/api/jobs',json=draft).json()['id'])
+    assert corrected['status']=='done' and corrected['id']!=original['id']
+    assert len(corrected['files'])==1 and corrected['sent']==1
+    assert bot.send_document.call_args.kwargs['caption'].endswith('👥 SMIRNOV EGOR')
+    assert client.get(url).json()['voucher']['hotel1']=='Valy Hotel'
+    assert len(client.get('/api/jobs/'+original['id']).json()['files'])==2
+    assert client.get(original['files'][1]['download']).content==original_pdf
+    assert client.get(f"/api/jobs/{original['id']}/files/-1/draft").status_code==404
+    assert client.get(f"/api/jobs/{original['id']}/files/2/draft").status_code==404
+    login(client,999)
+    assert client.get(url).status_code==404
+
+
+def test_expired_voucher_cannot_be_opened_for_editing(client):
+    login(client)
+    job=wait_job(client,client.post('/api/jobs',json=body()).json()['id'])
+    with auth.database() as db:
+        db.execute('UPDATE jobs SET created=? WHERE id=?',(time.time()-86401,job['id']))
+    assert client.get(f"/api/jobs/{job['id']}/files/0/draft").status_code==404
 
 
 def test_retry_preserves_room_caption(client):

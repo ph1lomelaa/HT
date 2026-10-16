@@ -7,7 +7,8 @@ import time
 import uuid
 import zipfile
 from pathlib import Path
-from aiogram.types import FSInputFile
+from aiogram.types import FSInputFile,InlineKeyboardButton,InlineKeyboardMarkup,WebAppInfo
+from urllib.parse import urlencode
 from pligrim_bot.config.constants import bot
 from pligrim_bot.core.voucher.builder import base_payload_from,ensure_chronological_city_order
 from pligrim_bot.core.voucher.render import render_voucher_page1_png,build_voucher_pdf,build_filename_from_payload
@@ -18,6 +19,14 @@ from .auth import database,state_dir
 
 logger=logging.getLogger(__name__)
 TASKS=set()
+
+
+def edit_document_button(key,index):
+    url=os.getenv('WEBAPP_URL','').rstrip('/')
+    if not url.startswith('https://'):return None
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text='Изменить этот ваучер',web_app=WebAppInfo(url=url+'/?'+urlencode({'edit':f'{key}:{index}'})))
+    ]])
 
 
 def prepared(request):
@@ -90,7 +99,7 @@ async def run_job(key,owner,request):
         if request.deliver_to_chat:
             for i,file in enumerate(files,1):
                 await bot.send_document(chat_id=owner,document=FSInputFile(file['path'],filename=file['name']),
-                                        caption=file['caption'])
+                                        caption=file['caption'],reply_markup=edit_document_button(key,i-1))
                 update_job(key,sent=i)
                 if i<len(files):await asyncio.sleep(.08)
             update_job(key,status='done')
@@ -115,7 +124,8 @@ async def retry_delivery(key,owner):
             payload=json.loads(job['payload'])
             for i,file in enumerate(job['files'][job['sent']:],job['sent']+1):
                 caption=file.get('caption') or voucher_caption(payload['title'],payload['voucher']['people']['rooms'][i-1])
-                await bot.send_document(chat_id=owner,document=FSInputFile(file['path'],filename=file['name']),caption=caption)
+                await bot.send_document(chat_id=owner,document=FSInputFile(file['path'],filename=file['name']),caption=caption,
+                                        reply_markup=edit_document_button(key,i-1))
                 update_job(key,sent=i)
             update_job(key,status='done')
         except Exception:

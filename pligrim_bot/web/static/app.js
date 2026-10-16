@@ -55,7 +55,7 @@ function renderHome(){
 async function start(mode){
   if(!state.user){resumeAction=()=>start(mode);await showLogin();return;}
   serviceDrafts={};
-  Object.assign(state,{view:'wizard',step:0,mode,voucher:defaults(),title:mode==='manual'?'Индивидуальный ваучер':'',selectedRow:null,warnings:[],error:'',secondCity:true,flightEnabled:false,flight:{outbound:legDefault(),inbound:legDefault()},background:0,preview:'',job:null});
+  Object.assign(state,{view:'wizard',step:0,mode,voucher:defaults(),title:mode==='manual'?'Индивидуальный ваучер':'',selectedRow:null,warnings:[],error:'',secondCity:true,flightEnabled:false,flight:{outbound:legDefault(),inbound:legDefault()},background:0,preview:'',job:null,editSource:null});
   dirty();render();window.scrollTo(0,0);tg?.enableClosingConfirmation?.();tg?.BackButton?.show();
   if(mode==='package')await loadCatalog();
 }
@@ -73,7 +73,7 @@ function summary(){
 }
 function renderWizard(){
   const content=[renderPackage,renderPeople,renderHotels,renderServices,renderFlight,renderReview][state.step]();
-  $('#main').innerHTML=`<div class="container wizard"><div class="breadcrumbs"><button data-action="home">Документы</button><span>/</span><span>Новый ваучер</span></div><div class="wizard-title"><div><h1>Новый ваучер</h1><p>Проверьте данные перед отправкой.</p></div><span class="draft-tag">${state.mode==='manual'?'Индивидуально':'Из пакета'}</span></div><ol class="steps" aria-label="Шаги оформления">${steps.map((s,i)=>`<li class="step ${i===state.step?'active':i<state.step?'done':''}" ${i===state.step?'aria-current="step"':''}><span class="step-number">${i<state.step?'✓':String(i+1).padStart(2,'0')}</span>${s}</li>`).join('')}</ol><div class="wizard-layout"><div><section class="panel" aria-labelledby="step-heading"><div id="step-error" tabindex="-1">${state.error?`<div class="notice error form-error" role="alert">${esc(state.error).replaceAll('\n','<br>')}</div>`:''}</div>${content}</section><div class="wizard-actions"><button class="button secondary" data-action="back">${icon('back')} ${state.step===0?'На главную':'Назад'}</button><span class="step-counter">Шаг ${state.step+1} из ${steps.length}</span><button class="button primary" data-action="${state.step===5?'generate':'next'}" ${state.loading?'disabled':''}>${state.loading?'<span class="spinner"></span>':''}${state.step===5?(state.deliver?'Создать и отправить':'Создать PDF'):'Продолжить'} ${icon(state.step===5?'document':'arrow')}</button></div></div>${summary()}</div></div>`;
+  $('#main').innerHTML=`<div class="container wizard"><div class="breadcrumbs"><button data-action="home">Документы</button><span>/</span><span>Новый ваучер</span></div><div class="wizard-title"><div><h1>${state.editSource?'Изменить ваучер':'Новый ваучер'}</h1><p>Проверьте данные перед отправкой.</p></div><span class="draft-tag">${state.mode==='manual'?'Индивидуально':'Из пакета'}</span></div><ol class="steps" aria-label="Шаги оформления">${steps.map((s,i)=>`<li class="step ${i===state.step?'active':i<state.step?'done':''}" ${i===state.step?'aria-current="step"':''}><span class="step-number">${i<state.step?'✓':String(i+1).padStart(2,'0')}</span>${s}</li>`).join('')}</ol><div class="wizard-layout"><div><section class="panel" aria-labelledby="step-heading">${state.editSource?'<div class="notice edit-notice">Редактируется выбранный ваучер. При отправке будет создан новый PDF только для указанных здесь паломников.</div>':''}<div id="step-error" tabindex="-1">${state.error?`<div class="notice error form-error" role="alert">${esc(state.error).replaceAll('\n','<br>')}</div>`:''}</div>${content}</section><div class="wizard-actions"><button class="button secondary" data-action="back">${icon('back')} ${state.step===0?'На главную':'Назад'}</button><span class="step-counter">Шаг ${state.step+1} из ${steps.length}</span><button class="button primary" data-action="${state.step===5?'generate':'next'}" ${state.loading?'disabled':''}>${state.loading?'<span class="spinner"></span>':''}${state.step===5?(state.deliver?'Создать и отправить':'Создать PDF'):'Продолжить'} ${icon(state.step===5?'document':'arrow')}</button></div></div>${summary()}</div></div>`;
   $('.step.active')?.scrollIntoView({block:'nearest',inline:'center'});
 }
 function renderPackage(){
@@ -134,7 +134,7 @@ async function loadPackages(){
   catch(e){state.loading='';state.error=e.message;render();}
 }
 async function selectPackage(row){
-  serviceDrafts={};
+  serviceDrafts={};state.editSource=null;
   const p=state.packages.find(p=>p.row===row);if(!p)return;
   state.loading='selection';state.error='';render();
   try{const data=await post('/api/package',{month:state.month,sheet:state.sheet,row,title:p.title});state.selectedRow=row;state.title=data.title;state.voucher={...defaults(),...data.voucher};state.voucher.people.rooms=state.voucher.people.rooms.map(r=>({...r,selected:true}));state.secondCity=Boolean(state.voucher.city2);state.warnings=data.voucher.warnings||[];state.background=/мед|mad|med/i.test(state.voucher.city1||'')?(/поезд|train/i.test(state.voucher.transfer||'')?1:0):2;dirty();state.loading='';render();notify('Пакет выбран. Проверьте паломников и детали проживания.');}
@@ -160,7 +160,7 @@ function renderJob(){
   const job=state.job;if(!job){home();return;}
   const done=job.status==='done',failed=job.status==='failed';
   const messages={queued:'Принимаем данные…',rendering:'Формируем PDF…',sending:`Отправляем PDF в Telegram${job.files?.length?` · ${job.sent} из ${job.files.length}`:''}`};
-  $('#main').innerHTML=`<div class="container wizard"><div class="breadcrumbs"><button data-action="home">Документы</button><span>/</span><span>Ваши ваучеры</span></div><section class="panel done-panel"><div class="done-icon">${done?icon('check'):failed?icon('document'):'<span class="spinner"></span>'}</div><h2>${done?'Документы готовы':failed?'Нужно немного внимания':'Формируем ваучеры'}</h2><p>${done?(state.deliver?'Готовые PDF отправлены в ваш личный чат Telegram. Также их можно скачать здесь.':'Готовые PDF можно скачать здесь.'):(failed?esc(job.error):'Оставьте страницу открытой или вернитесь в Telegram. Мы подготовим отдельный ваучер для каждой комнаты.')}</p>${!done&&!failed?`<div class="progress-label"><span class="spinner"></span>${messages[job.status]||'Готовим документы…'}</div>`:''}<div class="done-actions">${job.archive?`<button class="button primary" data-action="download" data-url="${esc(job.archive)}" data-name="Hickmet_vouchers.zip">${icon('download')}Скачать все документы</button>`:''}${done?`<button class="button secondary" data-action="home">Создать ещё ваучер ${icon('arrow')}</button>`:''}${failed&&job.files.length&&state.deliver?'<button class="button secondary" data-action="retry-send">Повторить отправку в Telegram</button>':''}${failed?'<button class="button secondary" data-action="edit-draft">Вернуться к данным</button>':''}</div><div class="file-list">${(job.files||[]).map(f=>`<div class="file-item">${icon('document')}<span>${esc(f.name)}<br><small class="muted">${f.pages} страницы · PDF</small></span><button class="button secondary small" data-action="download" data-url="${esc(f.download)}" data-name="${esc(f.name)}">${icon('download')}Скачать</button></div>`).join('')}</div>${job.archive?'<p class="fine-print">Документы доступны на сайте в течение 24 часов.<br>Файлы в Telegram останутся в вашем чате.</p>':''}</section></div>`;
+  $('#main').innerHTML=`<div class="container wizard"><div class="breadcrumbs"><button data-action="home">Документы</button><span>/</span><span>Ваши ваучеры</span></div><section class="panel done-panel"><div class="done-icon">${done?icon('check'):failed?icon('document'):'<span class="spinner"></span>'}</div><h2>${done?'Документы готовы':failed?'Нужно немного внимания':'Формируем ваучеры'}</h2><p>${done?(state.deliver?'Готовые PDF отправлены в ваш личный чат Telegram. Также их можно скачать здесь.':'Готовые PDF можно скачать здесь.'):(failed?esc(job.error):'Оставьте страницу открытой или вернитесь в Telegram. Мы подготовим отдельный ваучер для каждой комнаты.')}</p>${!done&&!failed?`<div class="progress-label"><span class="spinner"></span>${messages[job.status]||'Готовим документы…'}</div>`:''}<div class="done-actions">${job.archive?`<button class="button primary" data-action="download" data-url="${esc(job.archive)}" data-name="Hickmet_vouchers.zip">${icon('download')}Скачать все документы</button>`:''}${done?`<button class="button secondary" data-action="home">Создать ещё ваучер ${icon('arrow')}</button>`:''}${failed&&job.files.length&&state.deliver?'<button class="button secondary" data-action="retry-send">Повторить отправку в Telegram</button>':''}${failed?'<button class="button secondary" data-action="edit-draft">Вернуться к данным</button>':''}</div><div class="file-list">${(job.files||[]).map((f,index)=>`<div class="file-item">${icon('document')}<span>${esc(f.name)}<br><small class="muted">${f.pages} страницы · PDF</small></span><div class="file-actions"><button class="button secondary small" data-action="edit-document" data-job="${esc(job.id)}" data-index="${index}" ${done||failed?'':'disabled'}>${icon('edit')}Изменить</button><button class="button secondary small" data-action="download" data-url="${esc(f.download)}" data-name="${esc(f.name)}">${icon('download')}Скачать</button></div></div>`).join('')}</div>${job.archive?'<p class="fine-print">Документы доступны на сайте в течение 24 часов.<br>Файлы в Telegram останутся в вашем чате.</p>':''}</section></div>`;
 }
 async function download(url,name){
   try{
@@ -172,6 +172,17 @@ async function download(url,name){
     }
     const response=await fetch(url,{headers:token?{Authorization:`Bearer ${token}`}:{},credentials:'same-origin'});if(!response.ok)throw new Error('Не удалось скачать документ. Возможно, срок хранения истёк.');const blob=await response.blob(),href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(href),60000);}
   catch(e){notify(e.message);}
+}
+async function editDocument(key,index){
+  if(!state.user){resumeAction=()=>editDocument(key,index);await showLogin();return;}
+  const draft=await api(`/api/jobs/${key}/files/${index}/draft`);
+  clearTimeout(jobTimer);serviceDrafts={};
+  Object.assign(state,{view:'wizard',step:1,mode:'manual',title:draft.title,voucher:draft.voucher,
+    secondCity:Boolean(draft.voucher.city2),flightEnabled:Boolean(draft.flight),returnFlight:Boolean(draft.flight?.inbound),
+    flight:{outbound:draft.flight?.outbound||legDefault(),inbound:draft.flight?.inbound||legDefault()},
+    deliver:draft.deliver_to_chat,background:draft.background,preview:'',job:null,selectedRow:null,warnings:[],error:'',editSource:{key,index}});
+  state.voucher.people.rooms=state.voucher.people.rooms.map(room=>({...room,selected:true}));
+  dirty();render();window.scrollTo(0,0);tg?.enableClosingConfirmation?.();tg?.BackButton?.show();
 }
 async function showLogin(){
   const dialog=$('#login-dialog');if(dialog.open)return;
@@ -217,7 +228,7 @@ document.addEventListener('click',async event=>{
     else if(action==='account'){if(state.user)notify(`Вы вошли как ${state.user.first_name||state.user.username}`);else await showLogin();}
     else if(action==='logout'){await post('/api/auth/logout');token='';state.user=null;state.voucher=defaults();updateAccount();home();notify('Вы вышли из аккаунта.');}
     else if(action==='close-login')$('#login-dialog').close();
-    else if(action==='mode-package'||action==='mode-manual'){state.mode=action==='mode-package'?'package':'manual';if(state.mode==='manual'){serviceDrafts={};state.title='Индивидуальный ваучер';state.voucher=defaults();state.selectedRow=null;state.warnings=[];}render();if(state.mode==='package'&&!state.months.length)await loadCatalog();}
+    else if(action==='mode-package'||action==='mode-manual'){state.editSource=null;state.mode=action==='mode-package'?'package':'manual';if(state.mode==='manual'){serviceDrafts={};state.title='Индивидуальный ваучер';state.voucher=defaults();state.selectedRow=null;state.warnings=[];}render();if(state.mode==='package'&&!state.months.length)await loadCatalog();}
     else if(action==='refresh-catalog')await loadCatalog(true);
     else if(action==='select-package')await selectPackage(Number(button.dataset.row));
     else if(action==='next')await next();else if(action==='back')back();
@@ -226,6 +237,7 @@ document.addEventListener('click',async event=>{
     else if(action==='design'){state.background=Number(button.dataset.index);state.preview='';dirty();render();await loadPreview();}
     else if(action==='generate')await generate();
     else if(action==='download')await download(button.dataset.url,button.dataset.name);
+    else if(action==='edit-document')await editDocument(button.dataset.job,Number(button.dataset.index));
     else if(action==='retry-send'){await post(`/api/jobs/${state.job.id}/retry`);state.job.status='sending';renderJob();await pollJob();}
     else if(action==='edit-draft'){state.view='wizard';state.step=1;dirty();render();}
   }catch(e){if(state.view==='wizard')setError(e.message);else notify(e.message);}
@@ -239,5 +251,7 @@ async function init(){
   const configPromise=api('/api/config').then(config=>state.config=config).catch(()=>{});
   try{const result=tg?.initData?await post('/api/auth/telegram',{init_data:tg.initData}):await api('/api/me');state.user=result.user;if(result.session_token)token=result.session_token;updateAccount();}catch(e){if(tg?.initData)notify(e.message);}
   await configPromise;
+  const edit=new URLSearchParams(window.location.search).get('edit');
+  if(edit){const match=/^([a-f0-9]{32}):(\d+)$/.exec(edit);if(match){try{await editDocument(match[1],Number(match[2]));}catch(e){notify(e.message);}}else notify('Ссылка на ваучер некорректна.');}
 }
 init();
