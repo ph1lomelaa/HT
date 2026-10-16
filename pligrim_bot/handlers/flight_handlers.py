@@ -26,7 +26,7 @@ async def start_handler(message,state:FSMContext):
         from pligrim_bot.handlers.webapp_handlers import show_login_confirmation
         await show_login_confirmation(message,payload[4:]);return
     await reset_user(message.from_user.id,message.chat.id,state)
-    await message.answer('Ассаляму алейкум! Выберите действие:',reply_markup=main_scenario_kb())
+    await message.answer('Ассаляму алейкум! Откройте Hickmet, чтобы создать ваучер.',reply_markup=main_scenario_kb())
 
 
 @dp.callback_query(F.data.startswith('scenario:'))

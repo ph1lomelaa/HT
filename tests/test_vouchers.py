@@ -45,6 +45,7 @@ def call(data,uid=101):
 
 @pytest.fixture(autouse=True)
 def isolate(tmp_path,monkeypatch):
+    monkeypatch.setenv('WEBAPP_URL','https://voucherhickmet.duckdns.org')
     C.PREVIEW_CACHE.clear();C.EDIT_STATE.clear();E.EDIT_SESSIONS.clear();CALLBACKS.clear()
     C.dp.fsm.storage.storage.clear()
     monkeypatch.setattr(R,'TMP_DIR',str(tmp_path));monkeypatch.setattr(E,'TMP_DIR',str(tmp_path))
@@ -168,7 +169,8 @@ def test_manual_dispatcher_end_to_end(isolate):
             update=Update(update_id=1,callback_query=call(data)) if data else Update(update_id=1,message=msg(text))
             await C.dp.feed_update(C.bot,update)
         await feed(text='/start')
-        assert any(b.callback_data=='indv_voucher_start' for row in isolate.answer.call_args.kwargs['reply_markup'].inline_keyboard for b in row)
+        buttons=[b for row in isolate.answer.call_args.kwargs['reply_markup'].inline_keyboard for b in row]
+        assert len(buttons)==1 and buttons[0].web_app.url=='https://voucherhickmet.duckdns.org'
         await feed(data='indv_voucher_start');await feed(text='IVANOV IVAN, PETROVA ANNA')
         state=C.dp.fsm.get_context(bot=C.bot,chat_id=101,user_id=101)
         assert await state.get_state()==I.IndvVoucherState.waiting_room.state

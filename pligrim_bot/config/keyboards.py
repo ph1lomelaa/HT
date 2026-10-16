@@ -19,9 +19,6 @@ def main_scenario_kb():
     url=os.getenv('WEBAPP_URL','')
     if url.startswith('https://'):
         rows.append([InlineKeyboardButton(text='Открыть Hickmet · Создать ваучер',web_app=WebAppInfo(url=url))])
-    rows += [[button('Выбрать пакет в чате','get_month_buttons')],
-             [button('Создать индивидуально в чате','indv_voucher_start')],
-             [button('Ваучер на рейс','scenario:flight')]]
     return markup(rows)
 
 

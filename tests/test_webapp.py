@@ -181,9 +181,13 @@ def test_logout_revokes_bearer(client):
     assert client.get('/api/me',headers={'Authorization':'Bearer '+token}).status_code==401
 
 
-def test_bot_start_shows_webapp_button():
+def test_bot_start_shows_webapp_button(monkeypatch):
+    monkeypatch.setenv('WEBAPP_URL','https://voucherhickmet.duckdns.org')
     from pligrim_bot.config.keyboards import main_scenario_kb
-    assert any(b.web_app and b.web_app.url=='https://voucherhickmet.duckdns.org' for r in main_scenario_kb().inline_keyboard for b in r)
+    buttons=[b for row in main_scenario_kb().inline_keyboard for b in row]
+    assert len(buttons)==1
+    assert buttons[0].text=='Открыть Hickmet · Создать ваучер'
+    assert buttons[0].web_app.url=='https://voucherhickmet.duckdns.org'
 
 
 def test_native_telegram_download_link_supports_retries_and_expires(client):

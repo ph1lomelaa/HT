@@ -43,3 +43,11 @@
 .service-card input:disabled{color:#8c7a65;-webkit-text-fill-color:#8c7a65;opacity:1;background:#ebe3d6;border-style:dashed}
 .service-contact{margin-top:22px;padding-top:20px;border-top:1px solid #e2d6c3}
 @media(max-width:760px){.service-grid{grid-template-columns:minmax(0,1fr)}.service-card{padding:16px}.service-card-heading .checkline{font-size:12px;min-height:32px}.service-card-heading h3{font-size:14px}}
+
+/* Room names span the card; placement and occupancy sit below. */
+.room-fields{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.room-fields .people-names{grid-column:1/-1;grid-row:auto;min-width:0}
+.room-fields .people-names textarea{display:block;width:100%;height:auto;min-height:120px;max-height:360px;resize:vertical;white-space:pre;overflow-wrap:normal;word-break:normal;overflow-x:auto;font-size:14px;line-height:1.8;padding:14px 15px}
+.room-fields>.field{min-width:0}
+@media(max-width:760px){.room-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px}.room-fields .people-names textarea{font-size:16px;min-height:126px;padding:12px;line-height:1.7}.room-fields .field input,.room-fields .field select{font-size:16px}.room-fields .hint{line-height:1.7}}
+@media(max-width:370px){.room-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.room-fields .people-names{grid-column:1/-1;grid-row:auto}.room-fields .people-names textarea{height:auto}}
