@@ -17,6 +17,12 @@ _lock = threading.RLock()
 EXCLUDED_PILGRIM_MONTHS = {
     value.strip() for value in os.getenv('EXCLUDED_PILGRIM_MONTHS', '').split(',') if value.strip()
 }
+# These shared working documents remain available by the team's explicit request.
+SHARED_PILGRIM_SHEETS = {'JUNE-JULY-AUGUST 2026/27', 'RAMADAN/SHAWWAL-2026'}
+
+
+def is_shared_pilgrim_sheet(title):
+    return title.strip().upper() in SHARED_PILGRIM_SHEETS
 
 def get_google_client():
     global _client, client
@@ -41,7 +47,12 @@ def detect_pilgrim_months(sheets, *, as_of=None):
     today = as_of if as_of is not None else current_date()
     months = 'january february march april may june july august september october november december'.split()
     found = {}
+    shared = {}
     for title, key in sheets.items():
+        if is_shared_pilgrim_sheet(title):
+            if title not in EXCLUDED_PILGRIM_MONTHS:
+                shared[title] = key
+            continue
         month = next((m for m in months if re.search(r'\b'+m+r'\b', title.lower())), None)
         if month:
             year = re.search(r'20\d{2}', title)
@@ -54,7 +65,9 @@ def detect_pilgrim_months(sheets, *, as_of=None):
             if label in found:
                 raise ValueError(f'Несколько таблиц для {label}; уточните их названия')
             found[label] = key
-    return dict(sorted(found.items(), key=lambda item: (int(item[0].split()[-1]), months.index(item[0].split()[0].lower()))))
+    ordered = dict(sorted(found.items(), key=lambda item: (int(item[0].split()[-1]), months.index(item[0].split()[0].lower()))))
+    ordered.update(sorted(shared.items()))
+    return ordered
 
 
 def visible_pilgrim_months():

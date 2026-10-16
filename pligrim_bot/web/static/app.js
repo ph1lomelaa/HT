@@ -6,7 +6,7 @@ const esc=(value)=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 const steps=['Пакет','Паломники','Проживание','Услуги','Перелёт','Проверка'];
 const monthsRu=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const monthsEn=['January','February','March','April','May','June','July','August','September','October','November','December'];
-const monthLabel=m=>`${monthsRu[monthsEn.indexOf(m.split(' ')[0])]||m.split(' ')[0]} ${m.split(' ')[1]||''}`;
+const monthLabel=m=>{const match=/^([A-Za-z]+) (20\d{2})$/.exec(m);return match&&monthsEn.includes(match[1])?`${monthsRu[monthsEn.indexOf(match[1])]} ${match[2]}`:m;};
 const tg=window.Telegram?.WebApp;
 let token='',loginTimer=null,loginExpires=0,resumeAction=null,toastTimer=null,jobTimer=null,previewCounter=0;
 const defaults=()=>({city1:'Madinah',hotel1:'',dates1:'',checkin1:'16:00',city2:'Makkah',hotel2:'',dates2:'',checkin2:'16:00',service:'Виза и страховка',transfer:'Автобус',meal:'Завтрак и ужин',guide:'Групповой гид',excursions:'Мекка, Медина',tech_guide:'+966 56 328 0325',people:{rooms:[]}});

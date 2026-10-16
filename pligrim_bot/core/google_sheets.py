@@ -4,7 +4,7 @@ from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from gspread import WorksheetNotFound
 
-from pligrim_bot.config.settings import PALM_SHEETS, get_google_client
+from pligrim_bot.config.settings import PALM_SHEETS, get_google_client, is_shared_pilgrim_sheet
 from pligrim_bot.core.utils.date_utils import norm_date_str
 from pligrim_bot.core.utils.text_utils import norm_title
 
@@ -31,6 +31,9 @@ def get_palm_sheet_names(month_key: str, *, include_past: bool = False) -> list[
         ss = client.open_by_key(sheet_id)
         base_year = resolve_base_year(month_key, datetime.now().year)
         today = datetime.now(ZoneInfo("Asia/Almaty")).date()
+        # Shared documents have yearless worksheet names; do not guess their year
+        # from the first year in a season label and hide entire passenger groups.
+        include_past = include_past or is_shared_pilgrim_sheet(month_key)
 
         result = []
         for ws in ss.worksheets():

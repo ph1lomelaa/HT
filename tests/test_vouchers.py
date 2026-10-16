@@ -278,6 +278,26 @@ def test_cached_bot_menu_hides_month_after_rollover(monkeypatch):
     rows=K.get_palm_month_buttons().inline_keyboard
     assert [row[0].text for row in rows]==['November 2026','Обновить таблицы']
 
+
+def test_shared_season_and_ramadan_documents_remain_available(monkeypatch):
+    from datetime import date
+    monkeypatch.setattr(settings,'EXCLUDED_PILGRIM_MONTHS',set())
+    monkeypatch.setattr(settings,'current_date',lambda:date(2026,10,16))
+    sheets={'JUNE-JULY-AUGUST 2026/27':'summer','RAMADAN/SHAWWAL-2026':'ramadan',
+            'JUNE 2026':'old','OCTOBER 2026/27':'oct','JANUARY 2027':'jan'}
+    visible=settings.detect_pilgrim_months(sheets)
+    assert list(visible)==['October 2026','January 2027','JUNE-JULY-AUGUST 2026/27','RAMADAN/SHAWWAL-2026']
+    assert settings.detect_pilgrim_months(visible)==visible
+
+
+def test_shared_document_does_not_hide_yearless_worksheets(monkeypatch):
+    from types import SimpleNamespace
+    from pligrim_bot.core import google_sheets as GS
+    monkeypatch.setitem(GS.PALM_SHEETS,'RAMADAN/SHAWWAL-2026','ramadan')
+    sheet=SimpleNamespace(worksheets=lambda:[SimpleNamespace(title='01.03-07.03 ALA-MED')])
+    monkeypatch.setattr(GS,'get_google_client',lambda:SimpleNamespace(open_by_key=lambda key:sheet))
+    assert GS.get_palm_sheet_names('RAMADAN/SHAWWAL-2026')==['01.03-07.03 ALA-MED']
+
 @pytest.mark.parametrize('header',['First/Last Name','ФИО / Full name','First name / Имя','Last name\nФамилия'])
 def test_combined_and_bilingual_headers(header):assert P.detect_people_header([header,'Room type'])
 

@@ -175,3 +175,8 @@ month and future months only, using the Asia/Almaty calendar. Past months are
 hidden automatically, including when the year changes. The same filter applies
 to the chat menu and Mini App. Optional `EXCLUDED_PILGRIM_MONTHS` in `.env` can
 hide additional explicitly listed labels.
+By explicit team request, `JUNE-JULY-AUGUST 2026/27` and
+`RAMADAN/SHAWWAL-2026` remain available as shared working documents alongside
+those months. Their full names are preserved in both interfaces, and all their
+worksheets are offered because yearless worksheet titles cannot reliably identify
+the season. Check the actual hotel dates in preview before generating a voucher.
