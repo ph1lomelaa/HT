@@ -1,4 +1,4 @@
-import time
+import uuid
 from typing import List
 
 from aiogram import F, types
@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from pligrim_bot.config.constants import dp
 from pligrim_bot.config.keyboards import preview_main_kb
 from pligrim_bot.core.voucher.builder import base_payload_from
+from pligrim_bot.core.parsers.people_parser import is_valid_name
 from pligrim_bot.core.voucher.render import (
     render_voucher_page1_png,
     build_voucher_pdf,
@@ -27,7 +28,6 @@ class IndvVoucherState(StatesGroup):
 @dp.callback_query(F.data == "indv_voucher_start")
 async def indv_voucher_start(callback: CallbackQuery, state: FSMContext):
     """Начало создания индивидуального ваучера"""
-    print(" indv_voucher_start вызван!")
     await state.clear()
     await callback.message.answer(
         " *Индивидуальный ваучер*\n\n"
@@ -36,34 +36,27 @@ async def indv_voucher_start(callback: CallbackQuery, state: FSMContext):
         parse_mode="Markdown",
     )
     await state.set_state(IndvVoucherState.waiting_names)
-    print(f" Состояние установлено: {await state.get_state()}")
     await callback.answer()
 
 
 @dp.message(IndvVoucherState.waiting_names)
 async def indv_voucher_names(message: types.Message, state: FSMContext):
     """Обработка ввода имён"""
-    print(f" indv_voucher_names ВЫЗВАН! Текст: '{message.text}'")
-    print(f" Тип сообщения: {message.content_type}")
-    print(f" Текущее состояние: {await state.get_state()}")
 
     # Проверяем, что это текстовое сообщение
     if not message.text:
-        print(" Сообщение не содержит текст")
         await message.answer("Пожалуйста, введите текстовые имена через запятую.")
         return
 
     raw = message.text
     names: List[str] = [n.strip() for n in raw.split(",") if n.strip()]
 
-    print(f" Распознанные имена: {names}")
 
-    if not names:
+    if not names or len(names)>100 or any(not is_valid_name(n) or len(n)>120 for n in names):
         await message.answer(" Не смогла разобрать имена, введите ещё раз через запятую.")
         return
 
     await state.update_data(names=names)
-    print(f" Имена сохранены в состояние: {names}")
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -76,13 +69,13 @@ async def indv_voucher_names(message: types.Message, state: FSMContext):
 
     await message.answer("2️⃣ Выберите размещение:", reply_markup=kb)
     await state.set_state(IndvVoucherState.waiting_room)
-    print(f" Новое состояние установлено: {await state.get_state()}")
 
-@dp.callback_query(F.data.startswith("indv_room:"))
+@dp.callback_query(IndvVoucherState.waiting_room, F.data.startswith("indv_room:"))
 async def indv_voucher_room(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора типа номера"""
-    print(f" indv_voucher_room вызван! Callback: {callback.data}")
     _, kind = callback.data.split(":", 1)
+    if kind not in {"dbl","trpl","quad","sgl","twin"}:
+        await callback.answer("Неизвестное размещение"); return
     await state.update_data(room_kind=kind.upper())
 
     await callback.message.answer(
@@ -95,9 +88,8 @@ async def indv_voucher_room(callback: CallbackQuery, state: FSMContext):
 @dp.message(IndvVoucherState.waiting_city1, F.text)
 async def indv_voucher_city1(message: types.Message, state: FSMContext):
     """Обработка ввода первого города"""
-    print(f" indv_voucher_city1 вызван! Текст: {message.text}")
     city1 = (message.text or "").strip()
-    if not city1:
+    if not city1 or len(city1)>80:
         await message.answer(" Город не распознан, введите ещё раз.")
         return
 
@@ -112,8 +104,9 @@ async def indv_voucher_city1(message: types.Message, state: FSMContext):
 @dp.message(IndvVoucherState.waiting_city2, F.text)
 async def indv_voucher_city2(message: types.Message, state: FSMContext):
     """Обработка ввода второго города и финальная генерация"""
-    print(f" indv_voucher_city2 вызван! Текст: {message.text}")
     city2 = (message.text or "").strip()
+    if not city2 or len(city2)>80:
+        await message.answer("Введите город или дефис, если второго города нет.");return
     if city2 == "-":
         city2 = None
 
@@ -176,23 +169,28 @@ async def indv_voucher_city2(message: types.Message, state: FSMContext):
         "_people_flat": names,
     }
 
+    capacity={"SGL":1,"DBL":2,"TWIN":2,"TRPL":3,"QUAD":4}[room_kind]
+    rooms=[{"kind":room_kind,"people":names[i:i+capacity],"count":len(names[i:i+capacity]),"adults":len(names[i:i+capacity])} for i in range(0,len(names),capacity)]
+    voucher['people']['rooms']=rooms
+    voucher['room_groups']=rooms
+    voucher['_owner_id']=message.from_user.id
     base = base_payload_from(voucher)
 
-    cache_id = f"manual:{message.chat.id}:{int(time.time())}"
+    cache_id = uuid.uuid4().hex[:16]
     PREVIEW_CACHE[cache_id] = {
         "voucher": voucher,
         "base": base,
         "pkg_title": "Индивидуальный ваучер",
         "mode": "manual",
+        "owner_id": message.from_user.id,
+        "chat_id": message.chat.id,
     }
 
     text = preview_text(voucher)
 
     await message.answer(
-        " *Проверьте данные перед отправкой ваучера:*\n\n" + text,
-        reply_markup=preview_main_kb(cache_id),
-        parse_mode="Markdown"
+        "Проверьте данные перед отправкой ваучера:\n\n" + text,
+        reply_markup=preview_main_kb(cache_id)
     )
 
     await state.clear()
-    print(" Превью отправлено, состояние очищено")

@@ -1,52 +1,62 @@
-import logging
-import sys
-import os
 import asyncio
+import logging
+import os
+from aiogram import BaseMiddleware
+from aiogram.types import CallbackQuery
+from pligrim_bot.config.constants import bot,dp,PREVIEW_CACHE,EDIT_STATE
+from pligrim_bot.config import settings
+from pligrim_bot.data.sessions import CALLBACKS
 
-# Добавляем пути
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)
+# Import handlers once; the shared Dispatcher registers their filters.
+from pligrim_bot.handlers import flight_handlers,pilgrim_handlers,preview_handlers,palm_edit_handlers,palm_restart_handlers,indv_voucher_handlers,webapp_handlers
 
-try:
-    from pligrim_bot.config.settings import get_google_client, refresh_sheets
-    # Импортируем dp, в который всё будет регистрироваться
-    from pligrim_bot.config.constants import bot, dp
+logger=logging.getLogger(__name__)
 
-    # --- ВАЖНО: Просто импортируем файл, чтобы код в нем выполнился ---
-    # Звездочка (*) или просто import заставит сработать декораторы @dp... внутри файлов
-    from pligrim_bot.handlers.flight_handlers import *
 
-    # Вот наш файл с пилигримами, теперь он использует dp напрямую
-    from pligrim_bot.handlers.pilgrim_handlers import *
+class BotMiddleware(BaseMiddleware):
+    async def __call__(self,handler,event,data):
+        user=getattr(event,'from_user',None)
+        message=event.message if isinstance(event,CallbackQuery) else event
+        allowed={int(v) for v in os.getenv('ALLOWED_USER_IDS','').replace(',', ' ').split() if v.isdigit()}
+        if allowed and (not user or user.id not in allowed):
+            if isinstance(event,CallbackQuery):await event.answer('Нет доступа',show_alert=True)
+            else:await event.answer('Нет доступа к боту.')
+            return
+        if getattr(getattr(message,'chat',None),'type',None)!='private':
+            if isinstance(event,CallbackQuery):await event.answer('Используйте личный чат с ботом',show_alert=True)
+            else:await message.answer('Для работы с ваучерами откройте личный чат с ботом.')
+            return
+        for cache in (PREVIEW_CACHE,EDIT_STATE,CALLBACKS,palm_edit_handlers.EDIT_SESSIONS):cache.purge()
+        try:
+            return await handler(event,data)
+        except (ValueError,KeyError) as exc:
+            text=str(exc) if isinstance(exc,ValueError) else 'Данные изменились. Обновите список через /start.'
+        except Exception:
+            logger.exception('Failed to handle bot update')
+            text='Не удалось выполнить действие. Повторите попытку или начните заново через /start.'
+        await message.answer(text)
+        if isinstance(event,CallbackQuery):
+            try:await event.answer()
+            except Exception:pass
 
-    from pligrim_bot.handlers.preview_handlers import *
-    from pligrim_bot.handlers.debug_handlers import *
-    from pligrim_bot.handlers.palm_edit_handlers import *
-    from pligrim_bot.handlers.palm_restart_handlers import *
-    from pligrim_bot.handlers.indv_voucher_handlers import *
 
-    print(" Все модули успешно импортированы")
-except ImportError as e:
-    print(f" Ошибка импорта: {e}")
-    sys.exit(1)
+dp.message.outer_middleware(BotMiddleware())
+dp.callback_query.outer_middleware(BotMiddleware())
+
 
 async def main():
-    print(" Бот запускается…")
-    await bot.delete_webhook(drop_pending_updates=True)
-
-    # Создаем папки
-    os.makedirs("tmp", exist_ok=True)
-    os.makedirs("assets/fonts", exist_ok=True)
-    os.makedirs("assets/images", exist_ok=True)
-
-    print(" Polling started…")
-    # Роутеры подключать не нужно, так как мы использовали @dp прямо в файлах
+    logging.basicConfig(level=logging.INFO)
+    try:
+        await asyncio.to_thread(settings.refresh_sheets)
+    except Exception:
+        logger.exception('Google Sheets unavailable; manual vouchers remain available')
+    webapp_url=os.getenv('WEBAPP_URL','')
+    if webapp_url.startswith('https://'):
+        from aiogram.types import MenuButtonWebApp,WebAppInfo
+        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text='Ваучеры',web_app=WebAppInfo(url=webapp_url)))
+    await bot.delete_webhook(drop_pending_updates=False)
     await dp.start_polling(bot)
 
-if __name__ == "__main__":
-    try:
-        if sys.platform == "win32":
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        print("Bot stopped!")
+
+if __name__=='__main__':
+    asyncio.run(main())

@@ -111,25 +111,46 @@ def _parse_start_date(when: str):
     except Exception:
         return None
 
-def norm_date_str(s: str) -> str | None:
-    """Любую 5.11.25 / 05.11.2025 / 05/11/25 → 05.11.2025"""
-    m = DATE_RE.search(s or "")
-    if not m:
+def parse_date(value):
+    text = str(value or '').strip()
+    iso = re.search(r'(?<!\d)(20\d{2})-(\d{1,2})-(\d{1,2})(?!\d)', text)
+    match = re.search(r'(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{4}|\d{2})(?!\d)', text)
+    try:
+        if iso:
+            y, m, d = map(int, iso.groups())
+        elif match:
+            d, m, y = map(int, match.groups())
+            if y < 100: y += 2000
+        else:
+            return None
+        return datetime(y, m, d)
+    except ValueError:
         return None
-    d, mth, y = m.groups()
-    y = ("20" + y) if len(y) == 2 else y
-    return f"{d.zfill(2)}.{mth.zfill(2)}.{y}"
 
-def norm_date(val: str) -> str | None:
-    if not isinstance(val, str):
-        val = str(val or "")
-    s = val.strip()
-    m = DATE_RE.search(s)
-    if not m:
-        return None
-    d, mth, y = m.groups()
-    y = f"20{y}" if len(y) == 2 else y
-    return f"{d.zfill(2)}.{mth.zfill(2)}.{y}"
+
+def norm_date_str(value):
+    parsed = parse_date(value)
+    return parsed.strftime('%d.%m.%Y') if parsed else None
+
+
+def norm_date(value):
+    return norm_date_str(value)
+
+
+def parse_date_range(value):
+    tokens = re.findall(r'(?<!\d)(?:20\d{2}-\d{1,2}-\d{1,2}|\d{1,2}[./-]\d{1,2}[./-](?:\d{4}|\d{2}))(?!\d)', str(value or ''))
+    if len(tokens) != 2:
+        raise ValueError('Нужны две даты: ДД/ММ/ГГГГ – ДД/ММ/ГГГГ')
+    start, end = map(parse_date, tokens)
+    if not start or not end or end < start:
+        raise ValueError('Проверьте даты: выезд должен быть не раньше заезда')
+    return start, end
+
+
+def normalize_date_range(value):
+    start, end = parse_date_range(value)
+    return f"{start:%d/%m/%Y} – {end:%d/%m/%Y}"
+
 
 def year_from_title(title: str) -> int | None:
     m = re.search(r"(20\d{2})", title)

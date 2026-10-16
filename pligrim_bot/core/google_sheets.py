@@ -1,6 +1,7 @@
 import difflib
 import re
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from gspread import WorksheetNotFound
 
 from pligrim_bot.config.settings import PALM_SHEETS, get_google_client
@@ -29,7 +30,7 @@ def get_palm_sheet_names(month_key: str, *, include_past: bool = False) -> list[
 
         ss = client.open_by_key(sheet_id)
         base_year = resolve_base_year(month_key, datetime.now().year)
-        today = datetime.now().date()
+        today = datetime.now(ZoneInfo("Asia/Almaty")).date()
 
         result = []
         for ws in ss.worksheets():
@@ -42,7 +43,12 @@ def get_palm_sheet_names(month_key: str, *, include_past: bool = False) -> list[
             d, mth = ddmm
             try:
                 sheet_date = date(base_year, mth, d)
-                if include_past or sheet_date >= today:
+                dates = DDMM_RE.findall(ws.title)
+                end_date = sheet_date
+                if len(dates)>1:
+                    end_day,end_month=map(int,dates[1])
+                    end_date=date(base_year+(end_month<mth),end_month,end_day)
+                if include_past or end_date >= today:
                     result.append(ws.title)
             except ValueError:
                 continue
@@ -102,23 +108,16 @@ def find_worksheet_by_title(ss, wanted_title: str):
     Возвращает gspread.Worksheet или кидает WorksheetNotFound.
     """
     # 1) точное совпадение
-    for ws in ss.worksheets():
+    candidates = ss.worksheets()
+    for ws in candidates:
         if ws.title == wanted_title:
             return ws
 
     # 2) нормализованное совпадение
     want = norm_title(wanted_title)
-    candidates = ss.worksheets()
-    for ws in candidates:
-        if norm_title(ws.title) == want:
-            return ws
-
-    # 3) fuzzy fallback (на всякий случай)
-    titles = [ws.title for ws in candidates]
-    guess = difflib.get_close_matches(wanted_title, titles, n=1, cutoff=0.65)
-    if guess:
-        print(f"[WARN] Worksheet '{wanted_title}' not found, using close match '{guess[0]}'")
-        return ss.worksheet(guess[0])
+    matches = [ws for ws in candidates if norm_title(ws.title) == want]
+    if len(matches) == 1:
+        return matches[0]
 
     raise WorksheetNotFound(wanted_title)
 
@@ -200,10 +199,10 @@ def extract_pilgrims_data(worksheet, date_range: str):
         room_col = find_column_index_by_header(worksheet, ["room", "тип номера"])
 
         for i, row in enumerate(all_data[1:], start=2):  # пропускаем заголовок
-            if name_col < len(row) and row[name_col].strip():
+            if 0 <= name_col < len(row) and row[name_col].strip():
                 pilgrim_data = {
                     'name': row[name_col] if name_col < len(row) else '',
-                    'room_type': row[room_col] if room_col < len(row) else '',
+                    'room_type': row[room_col] if 0 <= room_col < len(row) else '',
                     'row_number': i
                 }
                 pilgrims.append(pilgrim_data)

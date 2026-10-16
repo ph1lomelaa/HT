@@ -4,6 +4,7 @@ import re
 from PIL import Image, ImageDraw, ImageFont
 from pligrim_bot.config.constants import BBOX, TMP_DIR, TTF_REGULAR, TTF_PATH
 from pligrim_bot.core.parsers.transport_parser import need_train
+from pligrim_bot.core.utils.validation import city_key
 
 # Правильные пути к файлам
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,9 +33,9 @@ def pick_page2_bg(city1: str | None, transfer_raw: str | None) -> str:
     c = (city1 or "").strip().lower()
     has_train = need_train(transfer_raw)
 
-    if ("madinah" in c or "медин" in c) and has_train:
+    if (city_key(c) == "madinah") and has_train:
         return JED_MED_TRAIN_PATH
-    if "madinah" in c or "медин" in c:
+    if city_key(c) == "madinah":
         return UAE_MED_PATH
     return UAE_MEC_PATH
 
@@ -67,21 +68,10 @@ def render_voucher_page1_png(payload: dict) -> str:
     FONT_PEOPLE = font(26)
     FONT_MAIN = font(22)
 
-    # Имена (правый столбец)
-    x1, y1, x2, y2 = BBOX["pilgrims_box"]
-    y = y1
-    line_h = 32
-    for nm in payload.get("pilgrims", []):
-        nm = str(nm).strip()
-        if not nm:
-            continue
-        if y + line_h > y2:
-            break
-        draw.text(
-            (x2 - draw.textlength(nm, font=FONT_PEOPLE), y),
-            nm, font=FONT_PEOPLE, fill=(20, 20, 20)
-        )
-        y += line_h
+    names = [str(n).strip() for n in payload.get('pilgrims', []) if str(n).strip()]
+    if not names:
+        raise ValueError('Не указаны паломники')
+    draw_fitted(draw, '\n'.join(names), BBOX['pilgrims_box'], 26, align='right')
 
     # Остальные поля
     for k, box in BBOX.items():
@@ -92,21 +82,36 @@ def render_voucher_page1_png(payload: dict) -> str:
             draw_value(draw, str(val), box, FONT_MAIN)
 
     file_stem = build_filename_from_payload(payload)
-    out = os.path.join(TMP_DIR, f"{file_stem}_p1.png")
+    out = os.path.join(TMP_DIR, f"{uuid.uuid4().hex}_p1.png")
     img.save(out, "PNG")
     return out
 
-def draw_value(draw, text, box, font, align="left"):
+def draw_fitted(draw, text, box, size=22, align='left'):
     x1, y1, x2, y2 = box
-    s = "" if text is None else str(text)
-    w = draw.textlength(s, font=font)
-    if align == "right":
-        x = x2 - w
-    elif align == "center":
-        x = x1 + (x2 - x1 - w) // 2
-    else:
-        x = x1
-    draw.text((x, y1), s, font=font, fill=(20, 20, 20))
+    width, height = x2-x1, y2-y1
+    for sz in range(size, 7, -1):
+        face = font(sz)
+        lines = []
+        for paragraph in str(text).split('\n'):
+            line = ''
+            for char in paragraph:
+                if line and draw.textlength(line+char, font=face)>width:
+                    lines.append(line); line = ''
+                line += char
+            lines.append(line)
+        line_height = sz+4
+        if len(lines)*line_height <= height and all(draw.textlength(line,font=face)<=width for line in lines):
+            for i,line in enumerate(lines):
+                w = draw.textlength(line,font=face)
+                x = x2-w if align=='right' else x1+(width-w)/2 if align=='center' else x1
+                draw.text((x,y1+i*line_height),line,font=face,fill=(20,20,20))
+            return
+    raise ValueError('Текст не помещается в ваучер: сократите значение или разделите группу')
+
+
+def draw_value(draw, text, box, font, align='left'):
+    draw_fitted(draw, str(text or ''), box, getattr(font,'size',22), align)
+
 
 def plural_nights(n) -> str:
     if n is None or n == "":
@@ -138,7 +143,7 @@ def load_font(size):
 
 # --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ---
 def build_voucher_pdf(page1_png: str, city1: str | None, transfer_raw: str | None,
-                      out_pdf_path: str, bg_index: int = -1) -> str:
+                      out_pdf_path: str, bg_index: int = -1, flight_data: dict | None = None) -> str:
     """
     Создает 2-страничный PDF ваучера.
     :param bg_index: Номер фона (0, 1, 2). Если -1, выбирает авто.
@@ -150,18 +155,50 @@ def build_voucher_pdf(page1_png: str, city1: str | None, transfer_raw: str | Non
         # Автовыбор (старая логика)
         page2_bg = pick_page2_bg(city1, transfer_raw)
 
-    p1 = Image.open(page1_png).convert("RGB")
-    p2 = Image.open(page2_bg).convert("RGB")
-
-    p1.save(out_pdf_path, "PDF", save_all=True, append_images=[p2])
+    with Image.open(page1_png) as source1, Image.open(page2_bg) as source2:
+        p1, p2 = source1.convert("RGB"), source2.convert("RGB")
+        extra = render_flight_page(flight_data) if flight_data else None
+        p1.save(out_pdf_path, "PDF", save_all=True, append_images=[p2]+([extra] if extra else []))
+        p1.close(); p2.close()
+        if extra: extra.close()
     return out_pdf_path
 
 def generate_ticket(output_path, data):
-    # (Оставляем заглушку или ваш старый код билета, он не влияет на ошибку)
-    pass
+    required=['depart_flight','depart_date1','depart_time1','depart_time2','return_flight','return_date1','return_time1','return_time2']
+    if any(not data.get(k) for k in required):raise ValueError('Недостаточно данных для ваучера на рейс')
+    with Image.open(TICKET_PATH) as source: img=source.convert('RGB')
+    draw=ImageDraw.Draw(img)
+    # Replace the variable part of the existing branded template.
+    draw.rectangle((85,410,1010,700),fill='white')
+    dep_city='Медина' if '263' in data['depart_flight'] else 'Джидда'
+    ret_city='Медина' if '264' in data['return_flight'] else 'Джидда'
+    for x,prefix,route in [(110,'depart',f'Алматы → {dep_city}'),(625,'return',f'{ret_city} → Алматы')]:
+        draw_fitted(draw,route,(x,425,x+380,465),26)
+        draw_fitted(draw,data[f'{prefix}_flight'],(x,485,x+380,525),24)
+        draw_fitted(draw,data[f'{prefix}_date1'],(x,540,x+380,580),24)
+        draw_fitted(draw,f"{data[f'{prefix}_time1']} → {data[f'{prefix}_time2']}",(x,600,x+380,645),30)
+    img.save(output_path,'PNG');img.close()
+    return output_path
 
 def generate_pdf_from_png(png_path):
     pdf_path = os.path.splitext(png_path)[0] + ".pdf"
     img = Image.open(png_path).convert("RGB")
     img.save(pdf_path, "PDF", resolution=100.0)
     return pdf_path
+
+def render_flight_page(flight):
+    """A separate page with manually entered flights; all times are airport-local."""
+    with Image.open(TICKET_PATH) as source: image=source.convert('RGB')
+    draw=ImageDraw.Draw(image)
+    draw.rectangle((85,410,1010,705),fill='white')
+    for x,key in [(110,'outbound'),(625,'inbound')]:
+        leg=flight.get(key)
+        if not leg:
+            draw_fitted(draw,'Обратный рейс\nне включён',(x,485,x+380,565),24)
+            continue
+        draw_fitted(draw,f"{leg['origin']} → {leg['destination']}",(x,420,x+380,470),25)
+        draw_fitted(draw,f"{leg['airline']} · {leg['number']}",(x,485,x+380,530),22)
+        draw_fitted(draw,f"{leg['departure_date']}  {leg['departure_time'][:5]}",(x,545,x+380,580),25)
+        draw_fitted(draw,f"{leg['arrival_date']}  {leg['arrival_time'][:5]}",(x,590,x+380,625),25)
+        draw_fitted(draw,'Вылет / прибытие · местное время',(x,645,x+380,675),15)
+    return image

@@ -1,407 +1,131 @@
+import asyncio
+import copy
 import os
-import re
-from typing import List, Dict
-
-from aiogram import types, F
-from aiogram.types import (
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    CallbackQuery,
-    FSInputFile
-)
-from aiogram.fsm.state import StatesGroup, State
+import tempfile
+from aiogram import F, types
+from aiogram.types import FSInputFile,InlineKeyboardMarkup,InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
-
-from pligrim_bot.config.constants import TMP_DIR, dp
-from pligrim_bot.config.keyboards import slot_for_city, citykey_for_value
+from aiogram.fsm.state import State,StatesGroup
+from pligrim_bot.config.constants import dp,TMP_DIR
+from pligrim_bot.config.keyboards import citykey_for_value
+from pligrim_bot.data.sessions import SessionCache
+from pligrim_bot.core.voucher.builder import base_payload_from
+from pligrim_bot.core.voucher.validation import apply_field,require_valid_voucher
+from pligrim_bot.core.voucher.render import render_voucher_page1_png,build_voucher_pdf,build_filename_from_payload
 from pligrim_bot.core.parsers.people_parser import human_room
-from pligrim_bot.core.utils.validation import city_ru
-from pligrim_bot.core.voucher.builder import base_payload_from, ensure_chronological_city_order, nights_from_dates
-from pligrim_bot.core.voucher.render import (
-    render_voucher_page1_png,
-    build_voucher_pdf,
-    build_filename_from_payload,
-    plural_nights,
-)
 
-# Глобальный кэш сессий редактирования: ключ — chat_id
-EDIT_SESSIONS: Dict[int, Dict] = {}
-
+EDIT_SESSIONS=SessionCache()
 class EditVoucherState(StatesGroup):
-    waiting_value = State()
+    waiting_value=State()
 
 
-def edit_voucher_fields_kb(chat_id: int, group_idx: int) -> InlineKeyboardMarkup:
-    """
-    Создает клавиатуру для выбора поля редактирования конкретного ваучера.
-    """
-    sess = EDIT_SESSIONS.get(chat_id)
-    if not sess:
-        return InlineKeyboardMarkup(inline_keyboard=[])
+def _effective(session,index):
+    if not 1<=index<=len(session['groups']):raise ValueError('Группа не найдена')
+    group=session['groups'][index-1]
+    v=copy.deepcopy(session['voucher']);v.update(copy.deepcopy(group.get('overrides',{})))
+    v['people']={'rooms':[copy.deepcopy(group)],'flat':list(group['people'])}
+    return v
 
-    voucher = sess["voucher"]
-    c1 = city_ru(voucher.get("city1") or "")
-    c2 = city_ru(voucher.get("city2") or "")
 
-    has_city1 = bool(voucher.get("city1"))
-    has_city2 = bool(voucher.get("city2"))
+def _session(callback):
+    sess=EDIT_SESSIONS.get(callback.message.chat.id)
+    if not sess or sess.get('owner_id')!=callback.from_user.id:raise ValueError('Сессия устарела или принадлежит другому пользователю')
+    return sess
 
-    items = []
 
-    # Кнопки для первого города
-    if has_city1:
-        citykey1 = citykey_for_value(voucher.get("city1"), "1")
-        items.append((f" Отель ({c1})", f"hotel@{citykey1}"))
-        items.append((f" Даты ({c1})", f"dates@{citykey1}"))
-        items.append((f"⏰ Чек-ин ({c1})", f"checkin@{citykey1}"))
-
-    # Кнопки для второго города
-    if has_city2:
-        citykey2 = citykey_for_value(voucher.get("city2"), "2")
-        items.append((f" Отель ({c2})", f"hotel@{citykey2}"))
-        items.append((f" Даты ({c2})", f"dates@{citykey2}"))
-        items.append((f"⏰ Чек-ин ({c2})", f"checkin@{citykey2}"))
-
-    # Остальные сервисные кнопки
-    items.extend([
-        (" Трансфер", "transfer"),
-        (" Питание", "meal"),
-        (" Гид", "guide"),
-        (" Экскурсии", "excursions"),
-        (" Тех. гид", "tech_guide"),
-        ("️ Сервис", "service"),
-    ])
-
-    rows = []
-    for i in range(0, len(items), 2):
-        row = []
-        for j in (i, i+1):
-            if j < len(items):
-                txt, key = items[j]
-                # callback: edit_field:GROUP_IDX:FIELD
-                row.append(InlineKeyboardButton(text=txt, callback_data=f"edit_field:{group_idx}:{key}"))
-        rows.append(row)
-
-    rows.append([InlineKeyboardButton(text="Отправить обновленный ваучер", callback_data=f"send_edit:{group_idx}")])
-    rows.append([InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="palm_edit_menu")])
+def edit_voucher_fields_kb(chat_id,group_idx):
+    sess=EDIT_SESSIONS.get(chat_id)
+    if not sess:return InlineKeyboardMarkup(inline_keyboard=[])
+    v=_effective(sess,group_idx);items=[]
+    for i in (1,2):
+        if v.get(f'city{i}'):
+            key=citykey_for_value(v[f'city{i}'],str(i))
+            for field,label in [('hotel','Отель'),('dates','Даты'),('checkin','Заезд')]:
+                items.append((f'{label} ({v[f"city{i}"]})',f'{field}@{key}'))
+    items += [('Размещение','room_type'),('Трансфер','transfer'),('Питание','meal'),('Гид','guide'),('Экскурсии','excursions'),('Тех. гид','tech_guide'),('Сервис','service')]
+    rows=[[InlineKeyboardButton(text=label,callback_data=f'edit_field:{group_idx}:{field}')] for label,field in items]
+    rows += [[InlineKeyboardButton(text='Отправить обновлённый ваучер',callback_data=f'send_edit:{group_idx}')],
+             [InlineKeyboardButton(text='Назад к списку',callback_data='palm_edit_menu')]]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def send_one_voucher_for_group(
-        message: types.Message,
-        pkg_title: str,
-        voucher: dict,
-        base: dict,
-        group: dict,
-        idx: int,
-        bg_index: int = -1
-):
-    """
-    Генерирует и отправляет ОДИН ваучер для конкретной комнаты/группы.
-    """
-    data = dict(base)
-
-    names: List[str] = group.get("people") or []
-    kind = (group.get("kind") or "").upper()
-    human_ru = human_room(kind) if kind else ""
-
-    data["pilgrims"] = names
-    if human_ru:
-        data["room1"] = human_ru
-        data["room2"] = human_ru
-
-    # 1. Рендерим PNG
-    p1_path = render_voucher_page1_png(data)
-
-    # 2. Формируем имя файла
-    raw_name = build_filename_from_payload(data)
-    # Добавляем idx, чтобы файлы не перезатирались, если имена одинаковые
-    pdf_name = f"{idx}_{raw_name}.pdf"
-    pdf_path = os.path.join(TMP_DIR, pdf_name)
-
-    # 3. Собираем PDF с выбранным фоном
-    build_voucher_pdf(
-        page1_png=p1_path,
-        city1=data.get("city1"),
-        transfer_raw=data.get("transfer"),
-        out_pdf_path=pdf_path,
-        bg_index=bg_index
-    )
-
-    # --- ФОРМИРУЕМ КРАСИВУЮ ПОДПИСЬ (CAPTION) ---
-
-    # Переводим тип комнаты на русский для красоты
-    room_label = kind # Если не найдем, оставим как есть (QUAD)
-    if "QUAD" in kind: room_label = "Четырёхместный номер"
-    elif "TRIP" in kind: room_label = "Трёхместный номер"
-    elif "DOUB" in kind or "DBL" in kind: room_label = "Двухместный номер"
-    elif "SING" in kind or "SGL" in kind: room_label = "Одноместный номер"
-    elif "5" in kind: room_label = "Пятиместный номер"
-
-    pax_count = len(names)
-    names_str = ", ".join(names)
-
-    # Собираем текст
-    caption = (
-        f"📄 {pkg_title}\n"
-        f"🛏 {room_label} · {pax_count} pax\n"
-        f"👥 {names_str}"
-    )
-
-    # 4. Отправляем документ
-    doc = FSInputFile(pdf_path)
-    # Важно: parse_mode="HTML" не обязателен, если нет жирного шрифта,
-    # но caption будет выглядеть аккуратно благодаря переносам строк.
-    await message.answer_document(doc, caption=caption)
+async def send_one_voucher_for_group(message,pkg_title,voucher,base,group,idx,bg_index=-1):
+    effective=copy.deepcopy(voucher);effective.update(copy.deepcopy(group.get('overrides',{})))
+    effective['people']={'rooms':[group],'flat':group.get('people',[])}
+    require_valid_voucher(effective)
+    data=base_payload_from(effective);data['pilgrims']=group['people']
+    for i in (1,2):
+        if data.get(f'city{i}'):data[f'room{i}']=human_room(group['kind'])
+    def render(folder):
+        png=render_voucher_page1_png(data)
+        try:
+            return build_voucher_pdf(png,data.get('city1'),data.get('transfer'),os.path.join(folder,'voucher.pdf'),bg_index)
+        finally:
+            if os.path.exists(png):os.unlink(png)
+    with tempfile.TemporaryDirectory(prefix='voucher-',dir=TMP_DIR) as folder:
+        pdf=await asyncio.to_thread(render,folder)
+        name=f'{idx}_{build_filename_from_payload(data)}.pdf'
+        caption=f'{pkg_title}\n{human_room(group["kind"])} · {len(group["people"])} чел.\n'+', '.join(group['people'])
+        await message.answer_document(FSInputFile(pdf,filename=name),caption=caption[:1000])
 
 
-async def start_after_voucher_menu(
-        message: types.Message,
-        pkg_title: str,
-        voucher: dict,
-        groups: list,
-        base: dict,
-        bg_index: int = -1
-):
-    """
-    Запускает меню «Что дальше?» (Редактировать / Заново)
-    """
-    chat_id = message.chat.id
-
-    # Сохраняем сессию
-    EDIT_SESSIONS[chat_id] = {
-        "pkg_title": pkg_title,
-        "voucher": voucher,
-        "groups": groups,
-        "base": base,
-        "bg_index": bg_index
-    }
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Изменить конкретного паломника", callback_data="palm_edit_menu")],
-        [InlineKeyboardButton(text="Создать ваучер", callback_data="palm_restart")]
-    ])
-
-    await message.answer("Все ваучеры отправлены.\nЧто дальше?", reply_markup=kb)
+async def start_after_voucher_menu(message,pkg_title,voucher,groups,base,bg_index=-1):
+    EDIT_SESSIONS[message.chat.id]={'pkg_title':pkg_title,'voucher':copy.deepcopy(voucher),'groups':copy.deepcopy(groups),'base':base,'bg_index':bg_index,'owner_id':voucher.get('_owner_id') or message.from_user.id}
+    kb=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text='Изменить конкретный ваучер',callback_data='palm_edit_menu')],
+        [InlineKeyboardButton(text='Создать ваучер',callback_data='palm_restart')]])
+    await message.answer('Ваучеры отправлены. Что дальше?',reply_markup=kb)
 
 
-@dp.callback_query(F.data == "palm_edit_menu")
-async def palm_show_edit_list(callback: CallbackQuery):
-    """Показывает список комнат для редактирования"""
-    sess = EDIT_SESSIONS.get(callback.message.chat.id)
-    if not sess:
-        await callback.answer("Сессия истекла", show_alert=True)
-        return
-
-    groups = sess["groups"]
-    rows = []
-    for i, grp in enumerate(groups, 1):
-        ppl = ", ".join(grp.get("people", []))
-        # В кнопке оставляем короткий вариант
-        btn_text = f"#{i} {grp.get('kind')} ({ppl[:15]}..)"
-        rows.append([InlineKeyboardButton(text=btn_text, callback_data=f"edit_grp:{i}")])
-
-    rows.append([InlineKeyboardButton(text="Создать ваучер", callback_data="palm_restart")])
-
-    await callback.message.edit_text("Выберите, чей ваучер исправить:", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+@dp.callback_query(F.data=='palm_edit_menu')
+async def palm_show_edit_list(callback):
+    sess=_session(callback);rows=[]
+    for i,g in enumerate(sess['groups'],1):
+        rows.append([InlineKeyboardButton(text=f'#{i} {g["kind"]}: '+', '.join(g['people'])[:50],callback_data=f'edit_grp:{i}')])
+    rows.append([InlineKeyboardButton(text='Создать ваучер',callback_data='palm_restart')])
+    await callback.message.answer('Выберите ваучер:',reply_markup=InlineKeyboardMarkup(inline_keyboard=rows));await callback.answer()
 
 
-@dp.callback_query(F.data.startswith("edit_grp:"))
-async def edit_grp_clicked(callback: CallbackQuery):
-    """Показывает меню полей для редактирования выбранного ваучера"""
-    sess = EDIT_SESSIONS.get(callback.message.chat.id)
-    if not sess:
-        await callback.answer("Сессия истекла", show_alert=True)
-        return
-
-    # Получаем индекс группы
-    group_idx = int(callback.data.split(":")[1])
-
-    # Сохраняем в сессию, какую группу редактируем
-    sess["editing_group_idx"] = group_idx
-
-    groups = sess["groups"]
-    if group_idx < 1 or group_idx > len(groups):
-        await callback.answer(" Группа не найдена", show_alert=True)
-        return
-
-    group = groups[group_idx - 1]
-    ppl = ", ".join(group.get("people", []))
-
-    await callback.message.edit_text(
-        f"️ Редактирование ваучера #{group_idx}\n"
-        f" {ppl}\n\n"
-        f"Выберите поле для изменения:",
-        reply_markup=edit_voucher_fields_kb(callback.message.chat.id, group_idx)
-    )
-    await callback.answer()
+@dp.callback_query(F.data.startswith('edit_grp:'))
+async def edit_grp_clicked(callback):
+    sess=_session(callback);index=int(callback.data.split(':')[1]);_effective(sess,index)
+    await callback.message.answer(f'Редактирование ваучера #{index}',reply_markup=edit_voucher_fields_kb(callback.message.chat.id,index));await callback.answer()
 
 
-@dp.callback_query(F.data.startswith("edit_field:"))
-async def edit_voucher_field(callback: CallbackQuery, state: FSMContext):
-    """Обработчик выбора конкретного поля для редактирования"""
-    try:
-        _, group_idx_str, field = callback.data.split(":", 2)
-        group_idx = int(group_idx_str)
-    except ValueError:
-        await callback.answer(" Ошибка формата данных", show_alert=True)
-        return
-
-    sess = EDIT_SESSIONS.get(callback.message.chat.id)
-    if not sess:
-        await callback.answer("Сессия истекла", show_alert=True)
-        return
-
-    # Сохраняем в state, что редактируем
-    await state.update_data(
-        chat_id=callback.message.chat.id,
-        group_idx=group_idx,
-        field=field
-    )
+@dp.callback_query(F.data.startswith('edit_field:'))
+async def edit_voucher_field(callback,state:FSMContext):
+    sess=_session(callback);_,index,field=callback.data.split(':',2);index=int(index);_effective(sess,index)
+    await state.update_data(chat_id=callback.message.chat.id,group_idx=index,field=field)
     await state.set_state(EditVoucherState.waiting_value)
-
-    # Формируем подсказку для пользователя
-    pretty_map = {
-        "hotel": "Отель",
-        "dates": "Даты в формате DD/MM/YYYY – DD/MM/YYYY",
-        "checkin": "Чек-ин, например 16:00",
-        "transfer": "Трансфер (например: Поезд, Автобус)",
-        "meal": "Питание (например: Завтрак и ужин)",
-        "guide": "Гид (например: Групповой гид)",
-        "excursions": "Экскурсии (например: Мекка, Медина)",
-        "tech_guide": "Технический гид (например: +966 56 328 0325)",
-        "service": "Сервис (например: Виза и страховка)",
-    }
-
-    base = field.split("@")[0]
-    city = field.split("@")[1] if "@" in field else None
-
-    city_labels = {
-        "madinah": " (Медина)",
-        "makkah": " (Мекка)",
-        "1": " (Город 1)",
-        "2": " (Город 2)"
-    }
-    city_label = city_labels.get(city, "")
-
-    await callback.message.answer(
-        f"️ Введите новое значение для: {pretty_map.get(base, field)}{city_label}"
-    )
-    await callback.answer()
+    await callback.message.answer('Введите новое значение. Даты: ДД/ММ/ГГГГ – ДД/ММ/ГГГГ.');await callback.answer()
 
 
 @dp.message(EditVoucherState.waiting_value)
-async def process_edit_value(message: types.Message, state: FSMContext):
-    """Обработчик ввода нового значения для поля"""
-    data = await state.get_data()
-    chat_id = data.get("chat_id")
-    group_idx = data.get("group_idx")
-    field = data.get("field")
-
-    sess = EDIT_SESSIONS.get(chat_id)
-    if not sess:
-        await message.answer("️ Сессия устарела. Начните заново.")
-        await state.clear()
-        return
-
-    voucher = sess["voucher"]
-    new_val = message.text.strip()
-
-    # Обработка поля
-    base = field.split("@")[0]
-    citykey = field.split("@")[1] if "@" in field else None
-
-    # Нормализация дат
-    if base == "dates":
-        m = re.findall(r'(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})', new_val)
-        if len(m) >= 2:
-            def _mk(t):
-                d, mth, y = t
-                y = ("20" + y) if len(y) == 2 else y
-                return f"{d.zfill(2)}/{mth.zfill(2)}/{y}"
-            new_val = f"{_mk(m[0])} – {_mk(m[1])}"
-
-    # Определяем конечное поле (slot)
-    if base in ("hotel", "dates", "checkin") and citykey:
-        slot = slot_for_city(voucher, citykey)
-        if slot is None:
-            # Если город не найден, создаем его
-            if citykey in ["madinah", "1"]:
-                slot = 1
-                voucher["city1"] = "Медина" if citykey == "madinah" else "Город 1"
-            else:
-                slot = 2
-                voucher["city2"] = "Мекка" if citykey == "makkah" else "Город 2"
-
-        key = f"{base}{slot}"
-    else:
-        key = base  # service/meal/guide/excursions/tech_guide/transfer
-
-    # Применяем изменение
-    voucher[key] = new_val
-
-    # Если правили даты — пересчитываем порядок и ночи
-    if base == "dates":
-        nights_count = nights_from_dates(new_val)
-        slot_key = key.replace("dates", "")  # получаем "1" или "2"
-        voucher[f"stay{slot_key}_nights"] = nights_count
-        voucher[f"stay{slot_key}"] = plural_nights(nights_count)
-        ensure_chronological_city_order(voucher)
-
-    # Обновляем сессию
-    EDIT_SESSIONS[chat_id]["voucher"] = voucher
-
-    await message.answer(
-        "✅ Значение обновлено! Можно изменить еще поля или отправить обновленный ваучер.",
-        reply_markup=edit_voucher_fields_kb(chat_id, group_idx)
-    )
-
-    # Очищаем состояние
+async def process_edit_value(message,state:FSMContext):
+    data=await state.get_data();sess=EDIT_SESSIONS.get(message.chat.id)
+    if not sess or sess.get('owner_id')!=message.from_user.id:
+        await state.clear();await message.answer('Сессия устарела. Начните заново.');return
+    if not message.text:
+        await message.answer('Введите новое значение текстом.');return
+    index=data['group_idx'];v=_effective(sess,index)
+    try:apply_field(v,data['field'],message.text)
+    except ValueError as exc:
+        await message.answer(str(exc));return
+    group=sess['groups'][index-1]
+    group['kind']=v['people']['rooms'][0]['kind']
+    group['overrides']={k:value for k,value in v.items() if k not in {'people','room_groups','_people_flat','source','warnings'}}
     await state.clear()
+    await message.answer('Обновлён только выбранный ваучер.',reply_markup=edit_voucher_fields_kb(message.chat.id,index))
 
 
-async def regenerate_and_send_voucher(message: types.Message, chat_id: int, group_idx: int):
-    """Пересоздает и отправляет обновленный ваучер для конкретной группы"""
-    sess = EDIT_SESSIONS.get(chat_id)
-    if not sess:
-        await message.answer("️ Сессия не найдена.")
-        return
-
-    pkg_title = sess["pkg_title"]
-    voucher = sess["voucher"]
-    groups = sess["groups"]
-    base = base_payload_from(voucher)
-    bg_index = sess.get("bg_index", -1)
-
-    if group_idx < 1 or group_idx > len(groups):
-        await message.answer(" Группа не найдена")
-        return
-
-    group = groups[group_idx - 1]
-
-    await message.answer(f"🔄 Пересоздаю ваучер #{group_idx}...")
-
-    # Отправляем обновленный ваучер
-    await send_one_voucher_for_group(
-        message, pkg_title, voucher, base, group, group_idx, bg_index=bg_index
-    )
-
-    await message.answer("✅ Обновленный ваучер отправлен!")
+async def regenerate_and_send_voucher(message,chat_id,group_idx):
+    sess=EDIT_SESSIONS.get(chat_id)
+    if not sess:raise ValueError('Сессия устарела')
+    v=_effective(sess,group_idx);group=sess['groups'][group_idx-1]
+    await send_one_voucher_for_group(message,sess['pkg_title'],v,base_payload_from(v),group,group_idx,sess['bg_index'])
 
 
-@dp.callback_query(F.data.startswith("send_edit:"))
-async def send_updated_voucher(callback: CallbackQuery):
-    try:
-        _, group_idx_str = callback.data.split(":", 1)
-        group_idx = int(group_idx_str)
-    except ValueError:
-        await callback.answer("Ошибка формата", show_alert=True)
-        return
-
-    chat_id = callback.message.chat.id
-    await regenerate_and_send_voucher(callback.message, chat_id, group_idx)
-    await callback.message.answer(
-        "Можете продолжить редактировать этот ваучер или выбрать другой:",
-        reply_markup=edit_voucher_fields_kb(chat_id, group_idx)
-    )
-    await callback.answer()
+@dp.callback_query(F.data.startswith('send_edit:'))
+async def send_updated_voucher(callback):
+    _session(callback);index=int(callback.data.split(':')[1]);await callback.answer('Формирую документ…')
+    await regenerate_and_send_voucher(callback.message,callback.message.chat.id,index)

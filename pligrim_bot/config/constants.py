@@ -1,37 +1,40 @@
 from aiogram import Bot, Dispatcher, F
+from aiogram.fsm.storage.memory import SimpleEventIsolation
+import gspread
+from google.oauth2.service_account import Credentials
+import json
 import os
 import re
 
-from .app_config import config
-
 # Базовые пути
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # папка config
-PROJECT_ROOT = str(config.project_root)  # папка pligrim_bot
-print(f" BASE_DIR: {BASE_DIR}")
-print(f" PROJECT_ROOT: {PROJECT_ROOT}")
+PROJECT_ROOT = os.path.dirname(BASE_DIR)  # папка pligrim_bot
 
-# Основные настройки
-API_TOKEN = config.bot_token
-TMP_DIR = str(config.tmp_dir)
+from .environment import ROOT
+from pligrim_bot.data.sessions import SessionCache
 
-# Google Sheets - расширенные права доступа
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
-
-CREDENTIALS_FILE = str(config.credentials_file)
+API_TOKEN = os.getenv("BOT_TOKEN", "")
+if not API_TOKEN:
+    raise RuntimeError("Укажите BOT_TOKEN в .env или переменных окружения")
+TMP_DIR = os.getenv("TMP_DIR", os.path.join(PROJECT_ROOT, "tmp"))
+os.makedirs(TMP_DIR, exist_ok=True)
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly",
+          "https://www.googleapis.com/auth/drive.readonly"]
+CREDENTIALS_FILE = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", str(next(
+    (p for p in [ROOT / "service_account.json", ROOT / "pligrim_bot/credentials/service_account.json",
+                  ROOT / "pligrim_bot/credentials/hickmet-premium-bot-601501356d30.json"] if p.exists()),
+    ROOT / "pligrim_bot/credentials/service_account.json")))
 
 FONTS_DIR = os.path.join(PROJECT_ROOT, "assets", "fonts", "Montserrat", "static")
 TTF_REGULAR = os.path.join(FONTS_DIR, "Montserrat-Regular.ttf")
 TTF_BOLD = os.path.join(FONTS_DIR, "Montserrat-Bold.ttf")
 TTF_MEDIUM = os.path.join(FONTS_DIR, "Montserrat-Medium.ttf")
 
-print(f" REGULAR exists: {os.path.exists(TTF_REGULAR)}   → {TTF_REGULAR}")
 
 # Инициализация бота
+# (Совет: Токен бота тоже лучше брать из переменных, но пока оставим так)
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(events_isolation=SimpleEventIsolation())
 
 # --- Исключения ---
 EXCLUDE_SHEETS = [
@@ -110,8 +113,8 @@ NEXT_PACKAGE_HINT = re.compile(
 # === PREVIEW / EDIT STATE ===
 from typing import Dict
 
-PREVIEW_CACHE: Dict[str, dict] = {}  # cache_id -> {"voucher":..., "pkg_title":..., "page2_png":...}
-EDIT_STATE: Dict[int, dict] = {}     # user_id -> {"cache_id":..., "field":...}
+PREVIEW_CACHE = SessionCache()  # cache_id -> {"voucher":..., "pkg_title":..., "page2_png":...}
+EDIT_STATE = SessionCache()     # user_id -> {"cache_id":..., "field":...}
 
 
 # === 2. ОТРИСОВКА СТР.1 =========================================
@@ -266,3 +269,4 @@ NOISE_TOKENS = {
 }
 
 CHILD_RX = re.compile(r'\b(inf(ant)?|chd|child|kid|реб(ён|ен)ок|дет(и|ск))\b', re.I)
+

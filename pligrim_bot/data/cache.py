@@ -1,5 +1,2 @@
-
-from typing import Dict
-
-PREVIEW_CACHE: Dict[str, dict] = {}  # cache_id -> {"voucher":..., "pkg_title":..., "page2_png":...}
-EDIT_STATE: Dict[int, dict] = {}     # user_id -> {"cache_id":..., "field":...}
+"""Backward-compatible aliases for the shared session stores."""
+from pligrim_bot.config.constants import PREVIEW_CACHE, EDIT_STATE

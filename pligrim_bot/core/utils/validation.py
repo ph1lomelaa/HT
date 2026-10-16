@@ -2,7 +2,7 @@ from pligrim_bot.core.utils.text_utils import norm_title
 
 def is_madinah(s: str|None) -> bool:
     s = (s or "").lower()
-    return any(x in s for x in ("madinah","medina","madina","медин"))
+    return any(x in s for x in ("madinah","medinah","medina","madina","медин","мадин"))
 
 def is_makkah(s: str|None) -> bool:
     s = (s or "").lower()
@@ -10,13 +10,13 @@ def is_makkah(s: str|None) -> bool:
 
 def city_key(s: str | None) -> str:
     s = (s or "").lower()
-    if any(x in s for x in ("madinah","medina","madina","медин","медина")): return "madinah"
+    if any(x in s for x in ("madinah","medinah","medina","madina","медин","мадин","медина")): return "madinah"
     if any(x in s for x in ("makkah","mecca","mekka","макк","мекка")):      return "makkah"
     return "other"
 
 def city_ru(name: str | None) -> str:
     s = (name or "").strip().lower()
-    if any(x in s for x in ("madinah","medina","madina","медин")):
+    if any(x in s for x in ("madinah","medinah","medina","madina","медин","мадин")):
         return "Медина"
     if any(x in s for x in ("makkah","mecca","mekka","макк")):
         return "Мекка"

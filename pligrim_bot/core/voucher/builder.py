@@ -21,14 +21,14 @@ def base_payload_from(voucher: dict) -> dict:
         "stay1":    _fmt_nights(n1),
         "room1":    "",
         "dates1":   voucher.get("dates1") or "",
-        "checkin1": voucher.get("checkin1") or "17:00",
+        "checkin1": voucher.get("checkin1") or "16:00",
 
         "city2":    city_ru(voucher.get("city2")),
         "hotel2":   voucher.get("hotel2") or "",
         "stay2":    _fmt_nights(n2),
         "room2":    "",
         "dates2":   voucher.get("dates2") or "",
-        "checkin2": voucher.get("checkin2") or "17:00",
+        "checkin2": voucher.get("checkin2") or "16:00",
 
         "service":    voucher.get("service") or "Виза и страховка",
         "transfer":   voucher.get("transfer") or "—",
@@ -39,54 +39,34 @@ def base_payload_from(voucher: dict) -> dict:
     }
 
 def ensure_chronological_city_order(v: dict) -> None:
-    """
-    Улучшенная логика определения порядка городов.
-    """
-    def parse_date_range(date_str):
-        if not date_str:
-            return None
-        try:
-            parts = date_str.split('–')
-            if len(parts) != 2:
-                return None
-            start_date = datetime.strptime(parts[0].strip(), "%d/%m/%Y")
-            return start_date
-        except Exception:
-            return None
+    from pligrim_bot.core.utils.date_utils import parse_date_range, normalize_date_range
+    starts = {}
+    for slot in (1, 2):
+        value = v.get(f'dates{slot}')
+        if value:
+            try:
+                start, end = parse_date_range(value)
+                v[f'dates{slot}'] = normalize_date_range(value)
+                v[f'stay{slot}_nights'] = (end-start).days
+                v[f'stay{slot}'] = plural_nights((end-start).days)
+                starts[slot] = start
+            except ValueError:
+                v[f'stay{slot}_nights'] = None
+                v[f'stay{slot}'] = ''
+    if 1 in starts and 2 in starts and starts[2] < starts[1]:
+        for pattern in ['city{}', 'hotel{}', 'dates{}', 'checkin{}', 'stay{}', 'stay{}_nights', 'room{}']:
+            a, b = pattern.format(1), pattern.format(2)
+            v[a], v[b] = v.get(b), v.get(a)
 
-    date1 = parse_date_range(v.get("dates1", ""))
-    date2 = parse_date_range(v.get("dates2", ""))
 
-    # Если оба города есть и порядок неправильный - меняем местами
-    if date1 and date2 and date2 < date1:
-        print(f" Меняем порядок городов: {date2} -> {date1}")
-
-        # Меняем все поля местами
-        swap_fields = ["city", "hotel", "dates", "checkin", "stay", "stay_nights"]
-        for fld in swap_fields:
-            v[f"{fld}1"], v[f"{fld}2"] = v.get(f"{fld}2"), v.get(f"{fld}1")
-
-        # Пересчитываем ночи
-        v["stay1_nights"] = nights_from_dates(v.get("dates1", ""))
-        v["stay2_nights"] = nights_from_dates(v.get("dates2", ""))
-        v["stay1"] = plural_nights(v["stay1_nights"])
-        v["stay2"] = plural_nights(v["stay2_nights"])
-
-def nights_from_dates(dates_range: str) -> int | None:
-    """Вычисляет количество ночей из строки с датами"""
-    if not dates_range:
-        return None
-
+def nights_from_dates(dates_range):
+    from pligrim_bot.core.utils.date_utils import parse_date_range
     try:
-        parts = [p.strip() for p in dates_range.split("–")]
-        if len(parts) != 2:
-            return None
-
-        d1 = datetime.strptime(parts[0], "%d/%m/%Y")
-        d2 = datetime.strptime(parts[1], "%d/%m/%Y")
-        return max(0, (d2 - d1).days)
-    except Exception:
+        start, end = parse_date_range(dates_range)
+        return (end-start).days
+    except ValueError:
         return None
+
 
 def _parse_from_date(dates_range: str) -> datetime | None:
     if not dates_range:
@@ -119,6 +99,8 @@ def assemble_voucher(OUT_AJ, OUT_AM, RET_JA, RET_MA, dep, ret, token):
         o, b = OUT_AJ.get(dep), RET_MA.get(ret)
     elif token == "AMJA":    # ALA→MED / JED→ALA (на будущее)
         o, b = OUT_AM.get(dep), RET_JA.get(ret)
+    elif token == "AMMA":
+        o, b = OUT_AM.get(dep), RET_MA.get(ret)
     else:
         o = b = None
 

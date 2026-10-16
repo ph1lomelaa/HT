@@ -1,7 +1,1 @@
-aiogram>=3.0
-gspread
-google-auth
-pillow
-requests
-aiohttp
-python-dotenv
+-r pligrim_bot/requirements.txt
