@@ -136,9 +136,7 @@ def refresh_catalog(force=False):
     with settings._lock:
         if force or not settings.PALM_SHEETS or time.monotonic()-_refreshed>300:
             settings.refresh_sheets();_refreshed=time.monotonic()
-        months='January February March April May June July August September October November December'.split()
-        keys=sorted(settings.PALM_SHEETS,key=lambda k:(int(k.split()[-1]),months.index(k.split()[0])))
-        return keys
+        return list(settings.visible_pilgrim_months())
 
 
 @app.get('/api/catalog')

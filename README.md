@@ -170,5 +170,8 @@ without keys or passenger data. Months currently come from English month names
 in accessible spreadsheet document titles. Missing months can indicate different
 service-account permissions, naming differences, or an older deployed version.
 An older version also hardcoded exclusions for February 2026, December 2025, and
-January 2026. The current version shows all accessible months by default; optional
-`EXCLUDED_PILGRIM_MONTHS` in `.env` can hide explicitly listed labels.
+January 2026. The current version shows accessible spreadsheets for the current
+month and future months only, using the Asia/Almaty calendar. Past months are
+hidden automatically, including when the year changes. The same filter applies
+to the chat menu and Mini App. Optional `EXCLUDED_PILGRIM_MONTHS` in `.env` can
+hide additional explicitly listed labels.

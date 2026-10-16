@@ -4,6 +4,7 @@ import os
 import re
 import threading
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials
 from .constants import SCOPES, CREDENTIALS_FILE
@@ -32,20 +33,34 @@ def get_google_client():
 def get_all_accessible_sheets():
     return {s.title: s.id for s in get_google_client().openall()}
 
-def detect_pilgrim_months(sheets):
+def current_date():
+    return datetime.now(ZoneInfo('Asia/Almaty')).date()
+
+
+def detect_pilgrim_months(sheets, *, as_of=None):
+    today = as_of if as_of is not None else current_date()
     months = 'january february march april may june july august september october november december'.split()
     found = {}
     for title, key in sheets.items():
         month = next((m for m in months if re.search(r'\b'+m+r'\b', title.lower())), None)
         if month:
             year = re.search(r'20\d{2}', title)
-            label = f"{month.title()} {year.group() if year else datetime.now().year}"
+            year_number = int(year.group()) if year else today.year
+            if (year_number, months.index(month)+1) < (today.year, today.month):
+                continue
+            label = f"{month.title()} {year_number}"
             if label in EXCLUDED_PILGRIM_MONTHS:
                 continue
             if label in found:
                 raise ValueError(f'Несколько таблиц для {label}; уточните их названия')
             found[label] = key
-    return found
+    return dict(sorted(found.items(), key=lambda item: (int(item[0].split()[-1]), months.index(item[0].split()[0].lower()))))
+
+
+def visible_pilgrim_months():
+    # Refilter cached labels when the month changes, even before a Google refresh.
+    with _lock:
+        return detect_pilgrim_months(PALM_SHEETS)
 
 def refresh_sheets():
     with _lock:

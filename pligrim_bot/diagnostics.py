@@ -12,11 +12,12 @@ def main():
         for title in sorted(sheets):
             print(' -', title)
         months = settings.detect_pilgrim_months(sheets)
-        print('Detected months:', len(months))
+        print('Current date (Asia/Almaty):', settings.current_date())
+        print('Visible current/future months:', len(months))
         for label in sorted(months):
             print(' -', label)
         if not months:
-            print('Check spreadsheet access and English month names in document titles.')
+            print('No current/future months found. Check access, years and English month names in document titles.')
     except Exception as error:
         print('Catalog check failed:', type(error).__name__)
         raise SystemExit(1) from None

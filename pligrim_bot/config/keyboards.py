@@ -1,6 +1,6 @@
 import os
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from .settings import PALM_SHEETS
+from .settings import PALM_SHEETS, visible_pilgrim_months
 from ..core.google_sheets import get_palm_sheet_names
 from ..core.utils.validation import city_key
 from ..data.sessions import callback_ref
@@ -26,7 +26,7 @@ def main_scenario_kb():
 
 
 def get_palm_month_buttons():
-    return markup([[button(k,'palm_month:'+k)] for k in PALM_SHEETS]+[[button('Обновить таблицы','refresh_sheets')]])
+    return markup([[button(k,'palm_month:'+k)] for k in visible_pilgrim_months()]+[[button('Обновить таблицы','refresh_sheets')]])
 
 
 def get_palm_sheet_buttons(month_key,show_all=False):

@@ -242,6 +242,8 @@ def test_flight_schedule_and_ticket(tmp_path):
 
 
 def test_refresh_keeps_imported_dictionary_references(monkeypatch):
+    from datetime import date
+    monkeypatch.setattr(settings,'current_date',lambda:date(2026,10,16))
     original=settings.PALM_SHEETS
     monkeypatch.setattr(settings,'get_all_accessible_sheets',lambda:{'OCTOBER 2026':'fake'})
     try:
@@ -250,11 +252,31 @@ def test_refresh_keeps_imported_dictionary_references(monkeypatch):
 
 
 def test_month_filter_is_optional_and_explicit(monkeypatch):
+    from datetime import date
+    monkeypatch.setattr(settings,'current_date',lambda:date(2025,12,1))
     sheets={'FEBRUARY 2026':'feb','JUNE 2026':'jun','DECEMBER 2025':'dec'}
     monkeypatch.setattr(settings,'EXCLUDED_PILGRIM_MONTHS',set())
     assert set(settings.detect_pilgrim_months(sheets))=={'February 2026','June 2026','December 2025'}
     monkeypatch.setattr(settings,'EXCLUDED_PILGRIM_MONTHS',{'February 2026','December 2025'})
     assert settings.detect_pilgrim_months(sheets)=={'June 2026':'jun'}
+
+
+def test_current_and_future_months_sorted_across_year_boundary(monkeypatch):
+    from datetime import date
+    monkeypatch.setattr(settings,'EXCLUDED_PILGRIM_MONTHS',set())
+    sheets={'JANUARY 2027':'jan','SEPTEMBER 2026':'sep','OCTOBER 2026':'oct',
+            'DECEMBER 2025':'old','NOVEMBER 2026':'nov','DECEMBER 2026':'dec'}
+    assert list(settings.detect_pilgrim_months(sheets,as_of=date(2026,10,16)))==[
+        'October 2026','November 2026','December 2026','January 2027']
+    assert settings.detect_pilgrim_months(sheets,as_of=date(2027,1,1))=={'January 2027':'jan'}
+
+
+def test_cached_bot_menu_hides_month_after_rollover(monkeypatch):
+    from datetime import date
+    monkeypatch.setattr(settings,'PALM_SHEETS',{'October 2026':'oct','November 2026':'nov'})
+    monkeypatch.setattr(settings,'current_date',lambda:date(2026,11,1))
+    rows=K.get_palm_month_buttons().inline_keyboard
+    assert [row[0].text for row in rows]==['November 2026','Обновить таблицы']
 
 @pytest.mark.parametrize('header',['First/Last Name','ФИО / Full name','First name / Имя','Last name\nФамилия'])
 def test_combined_and_bilingual_headers(header):assert P.detect_people_header([header,'Room type'])
