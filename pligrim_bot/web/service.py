@@ -13,6 +13,7 @@ from pligrim_bot.core.voucher.builder import base_payload_from,ensure_chronologi
 from pligrim_bot.core.voucher.render import render_voucher_page1_png,build_voucher_pdf,build_filename_from_payload
 from pligrim_bot.core.voucher.validation import require_valid_voucher
 from pligrim_bot.core.parsers.people_parser import human_room
+from pligrim_bot.core.voucher.caption import voucher_caption
 from .auth import database,state_dir
 
 logger=logging.getLogger(__name__)
@@ -72,7 +73,8 @@ def render_documents(key,request):
             finally:
                 if os.path.exists(png):os.unlink(png)
             name=f'{index:02d}_{build_filename_from_payload(payload)}.pdf'
-            files.append({'name':name,'path':str(path),'pages':3 if request.flight else 2,'people':len(room['people'])})
+            files.append({'name':name,'path':str(path),'pages':3 if request.flight else 2,'people':len(room['people']),
+                          'caption':voucher_caption(request.title,room)})
         with zipfile.ZipFile(folder/'vouchers.zip','w',zipfile.ZIP_DEFLATED) as archive:
             for file in files:archive.write(file['path'],arcname=file['name'])
     except Exception:
@@ -88,7 +90,7 @@ async def run_job(key,owner,request):
         if request.deliver_to_chat:
             for i,file in enumerate(files,1):
                 await bot.send_document(chat_id=owner,document=FSInputFile(file['path'],filename=file['name']),
-                                        caption=f'{request.title}\nВаучер {i} из {len(files)} · {file["people"]} чел.'[:1000])
+                                        caption=file['caption'])
                 update_job(key,sent=i)
                 if i<len(files):await asyncio.sleep(.08)
             update_job(key,status='done')
@@ -110,8 +112,10 @@ async def retry_delivery(key,owner):
     if not changed:raise ValueError('Отправка уже выполняется')
     async def send():
         try:
+            payload=json.loads(job['payload'])
             for i,file in enumerate(job['files'][job['sent']:],job['sent']+1):
-                await bot.send_document(chat_id=owner,document=FSInputFile(file['path'],filename=file['name']))
+                caption=file.get('caption') or voucher_caption(payload['title'],payload['voucher']['people']['rooms'][i-1])
+                await bot.send_document(chat_id=owner,document=FSInputFile(file['path'],filename=file['name']),caption=caption)
                 update_job(key,sent=i)
             update_job(key,status='done')
         except Exception:

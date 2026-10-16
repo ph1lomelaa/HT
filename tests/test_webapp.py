@@ -126,6 +126,18 @@ def test_documents_sent_only_to_authenticated_user(client):
     job=wait_job(client,client.post('/api/jobs',json=data).json()['id'])
     assert job['status']=='done' and job['sent']==1
     assert bot.send_document.call_args.kwargs['chat_id']==101
+    assert bot.send_document.call_args.kwargs['caption']=='📄 TEST VOUCHER\n🛏 Двухместный номер · 2 pax\n👥 IVANOV IVAN, PETROVA ANNA'
+
+
+def test_retry_preserves_room_caption(client):
+    login(client)
+    bot.send_document.side_effect=[RuntimeError('offline'),None]
+    job=wait_job(client,client.post('/api/jobs',json=body(deliver=True)).json()['id'])
+    assert job['status']=='failed'
+    assert client.post(f"/api/jobs/{job['id']}/retry").status_code==200
+    assert wait_job(client,job['id'])['status']=='done'
+    captions=[call.kwargs['caption'] for call in bot.send_document.call_args_list]
+    assert captions==['📄 TEST VOUCHER\n🛏 Двухместный номер · 2 pax\n👥 IVANOV IVAN, PETROVA ANNA']*2
 
 
 def test_idempotency_and_other_user_cannot_download(client):

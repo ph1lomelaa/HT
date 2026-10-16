@@ -65,8 +65,8 @@ async def send_one_voucher_for_group(message,pkg_title,voucher,base,group,idx,bg
     with tempfile.TemporaryDirectory(prefix='voucher-',dir=TMP_DIR) as folder:
         pdf=await asyncio.to_thread(render,folder)
         name=f'{idx}_{build_filename_from_payload(data)}.pdf'
-        caption=f'{pkg_title}\n{human_room(group["kind"])} · {len(group["people"])} чел.\n'+', '.join(group['people'])
-        await message.answer_document(FSInputFile(pdf,filename=name),caption=caption[:1000])
+        from pligrim_bot.core.voucher.caption import voucher_caption
+        await message.answer_document(FSInputFile(pdf,filename=name),caption=voucher_caption(pkg_title,group))
 
 
 async def start_after_voucher_menu(message,pkg_title,voucher,groups,base,bg_index=-1):
