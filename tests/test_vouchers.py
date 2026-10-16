@@ -251,6 +251,24 @@ def test_refresh_keeps_imported_dictionary_references(monkeypatch):
     finally:settings.PALM_SHEETS.clear();settings.ALL_SHEETS.clear()
 
 
+@pytest.mark.parametrize('names',[
+    ['IBRAGIMOVA KULNARA','TURSYNBAYEVA SABIRA'],
+    ['ABDURAKHMANOVA AIGERIM NURMUKHAMEDOVNA','NURMUKHAMBETOV ABDURAKHMAN'],
+    ['IBRAGIMOVA KULNARA','TURSYNBAYEVA SABIRA','BEKENOV TUGELBAY','KOSHKINBAYEVA ALMA'],
+])
+def test_full_names_stay_on_separate_lines_inside_box(names):
+    from PIL import ImageDraw
+    draw=ImageDraw.Draw(Image.new('RGB',(1080,1920),'white'))
+    box=C.BBOX['pilgrims_box']
+    with patch.object(draw,'text',wraps=draw.text) as text:
+        R.draw_fitted(draw,'\n'.join(names),box,26,align='right',wrap=False)
+        assert [call.args[1] for call in text.call_args_list]==names
+        for call in text.call_args_list:
+            bounds=draw.textbbox(call.args[0],call.args[1],font=call.kwargs['font'])
+            assert box[0]<=bounds[0] and bounds[2]<=box[2]
+            assert box[1]<=bounds[1] and bounds[3]<=box[3]
+
+
 def test_month_filter_is_optional_and_explicit(monkeypatch):
     from datetime import date
     monkeypatch.setattr(settings,'current_date',lambda:date(2025,12,1))

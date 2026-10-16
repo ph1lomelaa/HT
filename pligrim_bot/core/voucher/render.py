@@ -65,13 +65,12 @@ def render_voucher_page1_png(payload: dict) -> str:
     """Рендерит первую страницу ваучера"""
     img = Image.open(BG_PATH).convert("RGBA")
     draw = ImageDraw.Draw(img)
-    FONT_PEOPLE = font(26)
     FONT_MAIN = font(22)
 
     names = [str(n).strip() for n in payload.get('pilgrims', []) if str(n).strip()]
     if not names:
         raise ValueError('Не указаны паломники')
-    draw_fitted(draw, '\n'.join(names), BBOX['pilgrims_box'], 26, align='right')
+    draw_fitted(draw, '\n'.join(names), BBOX['pilgrims_box'], 26, align='right', wrap=False)
 
     # Остальные поля
     for k, box in BBOX.items():
@@ -86,25 +85,33 @@ def render_voucher_page1_png(payload: dict) -> str:
     img.save(out, "PNG")
     return out
 
-def draw_fitted(draw, text, box, size=22, align='left'):
+def draw_fitted(draw, text, box, size=22, align='left', *, wrap=True):
     x1, y1, x2, y2 = box
     width, height = x2-x1, y2-y1
     for sz in range(size, 7, -1):
         face = font(sz)
         lines = []
         for paragraph in str(text).split('\n'):
+            if not wrap:
+                lines.append(paragraph)
+                continue
             line = ''
-            for char in paragraph:
-                if line and draw.textlength(line+char, font=face)>width:
-                    lines.append(line); line = ''
-                line += char
+            for word in paragraph.split():
+                candidate = f'{line} {word}' if line else word
+                if line and draw.textlength(candidate, font=face)>width:
+                    lines.append(line)
+                    line = word
+                else:
+                    line = candidate
             lines.append(line)
-        line_height = sz+4
-        if len(lines)*line_height <= height and all(draw.textlength(line,font=face)<=width for line in lines):
-            for i,line in enumerate(lines):
-                w = draw.textlength(line,font=face)
+        bounds = [draw.textbbox((0,0),line,font=face) for line in lines]
+        ink_height = max(b[3]-b[1] for b in bounds)
+        line_height = max(sz+4,ink_height+4)
+        if (len(lines)-1)*line_height+ink_height <= height and all(max(draw.textlength(line,font=face),b[2]-b[0])<=width for line,b in zip(lines,bounds)):
+            for i,(line,b) in enumerate(zip(lines,bounds)):
+                w = max(draw.textlength(line,font=face),b[2]-b[0])
                 x = x2-w if align=='right' else x1+(width-w)/2 if align=='center' else x1
-                draw.text((x,y1+i*line_height),line,font=face,fill=(20,20,20))
+                draw.text((x-b[0],y1+i*line_height-b[1]),line,font=face,fill=(20,20,20))
             return
     raise ValueError('Текст не помещается в ваучер: сократите значение или разделите группу')
 

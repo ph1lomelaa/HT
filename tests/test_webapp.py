@@ -140,6 +140,23 @@ def test_retry_preserves_room_caption(client):
     assert captions==['📄 TEST VOUCHER\n🛏 Двухместный номер · 2 pax\n👥 IVANOV IVAN, PETROVA ANNA']*2
 
 
+def test_excluded_services_are_rendered_without_default_substitution(client,monkeypatch):
+    from pligrim_bot.core.voucher import render
+    original=render.draw_value
+    values=[]
+    def record(draw,text,*args,**kwargs):
+        values.append(text)
+        return original(draw,text,*args,**kwargs)
+    monkeypatch.setattr(render,'draw_value',record)
+    login(client)
+    data=body()
+    for key in ['service','transfer','meal','guide','excursions']:
+        data['voucher'][key]='Не включено'
+    job=wait_job(client,client.post('/api/jobs',json=data).json()['id'])
+    assert job['status']=='done'
+    assert values.count('Не включено')==5
+
+
 def test_idempotency_and_other_user_cannot_download(client):
     login(client);data=body()
     first=client.post('/api/jobs',json=data).json()['id'];second=client.post('/api/jobs',json=data).json()['id']
