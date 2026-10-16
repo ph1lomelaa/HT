@@ -55,3 +55,32 @@
 .file-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .file-actions .button{gap:6px}.edit-notice{margin-bottom:22px;text-align:left}
 @media(max-width:760px){.file-item{flex-wrap:wrap}.file-item>span{flex-basis:calc(100% - 40px)}.file-actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:4px}.file-actions .button{font-size:12px;min-height:42px;padding:9px}}
+
+/* Consistent controls across Safari, Telegram WebView and desktop browsers. */
+.form-grid{align-items:start}
+.form-grid .field>span{display:flex;align-items:flex-end;min-height:2.8em;line-height:1.4}
+.form-grid .field input,.form-grid .field select,.form-grid .field .stay-value{box-sizing:border-box;height:52px;min-height:52px;width:100%;margin:0;border:1px solid #daccb5;border-radius:9px;padding:12px 14px;font-size:14px;line-height:1.4;background:#fffcf6;color:#4c3d2d;-webkit-appearance:none;appearance:none}
+.form-grid .field input::-webkit-date-and-time-value{min-height:1em;text-align:left}
+.form-grid .field .stay-value{display:flex;align-items:center;background:#f1e9dc;color:#88704e}
+.room-fields .field>span{display:flex;align-items:center;min-height:22px;line-height:1.4}
+.room-fields .catalog-picker summary{height:52px;min-height:52px;border-radius:9px;padding:10px 12px;font-size:15px}
+.room-fields .picker-menu{min-width:240px;max-width:calc(100vw - 64px)}
+.adult-stepper{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:0;height:52px;padding:3px;border:1px solid #daccb5;border-radius:9px;background:#fffcf6}
+.adult-stepper button{display:flex;align-items:center;justify-content:center;border:0;border-radius:6px;min-width:0;width:100%;height:44px;padding:0;background:#eee4d5;color:#745c3b;font-size:22px;line-height:1;touch-action:manipulation}
+.adult-stepper button:hover:not(:disabled){background:#e2d3bd}.adult-stepper button:disabled{opacity:.3;cursor:default}
+.adult-stepper output{display:block;min-width:0;padding:0;text-align:center;font-size:16px;font-variant-numeric:tabular-nums;line-height:1.4;color:#4c3d2d}
+.room-occupancy-note{grid-column:1/-1;margin:0;font-size:11px;line-height:1.7;color:#9a8466}
+.program-heading{font-size:13px;color:#80684a;margin-bottom:14px}
+.design-grid{align-items:stretch;margin-bottom:16px}
+.design-option{display:flex;flex-direction:column;gap:9px;padding:10px;height:100%;border-radius:10px}
+.design-option img{height:135px;flex-shrink:0;object-fit:contain;border-radius:6px}
+.design-option>span{display:block;padding:0;min-height:4.5em;font-size:11px;line-height:1.5;color:#8a704d}
+.program-explanation{padding:16px 18px;border:1px solid #dfd1bb;border-radius:10px;background:#f3ebde;margin-bottom:24px}
+.program-explanation p{font-size:12px;line-height:1.8;margin-bottom:5px;color:#745d3e}
+.program-explanation small{display:block;font-size:10px;line-height:1.8;color:#9a815d;margin-bottom:12px}
+.program-dialog{width:min(680px,calc(100% - 24px));max-height:90dvh;overflow:auto;padding:0;border:1px solid #d9c9ad;border-radius:12px;background:#fbf7f0;color:#4c3d2d;box-shadow:0 20px 80px #30211140}
+.program-dialog::backdrop{background:#30291e66;backdrop-filter:blur(4px)}
+.program-dialog-heading{position:sticky;top:0;display:flex;align-items:start;justify-content:space-between;gap:16px;padding:20px;background:#fbf7f0;border-bottom:1px solid #e2d5c0}
+.program-dialog-heading h2{font-size:26px;margin:0 0 7px}.program-dialog-heading p{font-size:11px;line-height:1.7;margin:0;color:#977e5a}.program-dialog-heading .icon-button{min-width:40px;min-height:40px}
+.program-dialog>img{display:block;width:100%;height:auto}
+@media(max-width:760px){.form-grid .field input,.form-grid .field select,.form-grid .field .stay-value{font-size:16px;height:52px;min-height:52px;padding:11px 12px}.room-fields .catalog-picker summary{font-size:16px}.room-occupancy-note{font-size:11px}.design-option{padding:7px;gap:9px}.design-option img{height:108px}.design-option>span{font-size:10px;min-height:4.5em}.program-explanation{padding:14px}.program-dialog-heading{padding:15px}.program-dialog-heading h2{font-size:23px}}
