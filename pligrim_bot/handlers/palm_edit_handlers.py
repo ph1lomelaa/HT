@@ -64,7 +64,7 @@ async def send_one_voucher_for_group(message,pkg_title,voucher,base,group,idx,bg
             if os.path.exists(png):os.unlink(png)
     with tempfile.TemporaryDirectory(prefix='voucher-',dir=TMP_DIR) as folder:
         pdf=await asyncio.to_thread(render,folder)
-        name=f'{idx}_{build_filename_from_payload(data)}.pdf'
+        name=f'{build_filename_from_payload(data)}.pdf'
         from pligrim_bot.core.voucher.caption import voucher_caption
         await message.answer_document(FSInputFile(pdf,filename=name),caption=voucher_caption(pkg_title,group))
 

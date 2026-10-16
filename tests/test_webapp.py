@@ -5,6 +5,8 @@ import io
 import json
 import time
 import uuid
+import zipfile
+from pathlib import PurePosixPath
 from unittest.mock import AsyncMock
 from urllib.parse import urlencode
 import pytest
@@ -117,9 +119,11 @@ def test_download_with_optional_flight(client,flight,pages):
     key=response.json()['id'];job=wait_job(client,key)
     assert job['status']=='done',job
     assert job['files'][0]['pages']==pages
+    assert job['files'][0]['name']=='IVANOV IVAN, PETROVA ANNA.pdf'
     pdf=client.get(job['files'][0]['download']);assert pdf.status_code==200
     assert len(PdfReader(io.BytesIO(pdf.content)).pages)==pages
-    assert client.get(job['archive']).content[:2]==b'PK'
+    with zipfile.ZipFile(io.BytesIO(client.get(job['archive']).content)) as archive:
+        assert archive.namelist()==['IVANOV IVAN, PETROVA ANNA.pdf']
     bot.send_document.assert_not_called()
 
 
@@ -129,10 +133,25 @@ def test_documents_sent_only_to_authenticated_user(client):
     job=wait_job(client,client.post('/api/jobs',json=data).json()['id'])
     assert job['status']=='done' and job['sent']==1
     assert bot.send_document.call_args.kwargs['chat_id']==101
+    assert bot.send_document.call_args.kwargs['document'].filename=='IVANOV IVAN, PETROVA ANNA.pdf'
     assert bot.send_document.call_args.kwargs['caption']=='📄 TEST VOUCHER\n🛏 Двухместный номер · 2 pax\n👥 IVANOV IVAN, PETROVA ANNA'
     edit_button=bot.send_document.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
     assert edit_button.text=='Изменить этот ваучер'
     assert f"edit={job['id']}%3A0" in edit_button.web_app.url
+
+
+def test_same_passenger_filenames_preserved_in_archive(client):
+    login(client);data=body()
+    data['voucher']['people']['rooms']*=2
+    job=wait_job(client,client.post('/api/jobs',json=data).json()['id'])
+    assert job['status']=='done',job
+    expected='IVANOV IVAN, PETROVA ANNA.pdf'
+    assert [file['name'] for file in job['files']]==[expected,expected]
+    with zipfile.ZipFile(io.BytesIO(client.get(job['archive']).content)) as archive:
+        names=archive.namelist()
+        assert len(names)==len(set(names))==2
+        assert all(PurePosixPath(name).name==expected for name in names)
+        assert all(archive.read(name).startswith(b'%PDF') for name in names)
 
 
 def test_edit_one_voucher_preserves_other_rooms_and_original_pdfs(client):

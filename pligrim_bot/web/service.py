@@ -6,6 +6,7 @@ import shutil
 import time
 import uuid
 import zipfile
+from collections import Counter
 from pathlib import Path
 from aiogram.types import FSInputFile,InlineKeyboardButton,InlineKeyboardMarkup,WebAppInfo
 from urllib.parse import urlencode
@@ -105,11 +106,16 @@ def render_documents(key,request):
                                       request.flight.model_dump(mode='json') if request.flight else None)
                 finally:
                     if os.path.exists(png):os.unlink(png)
-                name=f'{index:02d}_{build_filename_from_payload(payload)}.pdf'
+                name=f'{build_filename_from_payload(payload)}.pdf'
                 files.append({'name':name,'path':str(path),'pages':3 if request.flight else 2,'people':len(room['people']),
                               'caption':voucher_caption(request.title,room)})
         with zipfile.ZipFile(folder/'vouchers.zip','w',zipfile.ZIP_DEFLATED) as archive:
-            for file in files:archive.write(file['path'],arcname=file['name'])
+            counts=Counter(file['name'].casefold() for file in files)
+            for index,file in enumerate(files,1):
+                # Separate folders preserve documents with identical passenger names.
+                name=file['name']
+                if counts[name.casefold()]>1:name=f'Комната {index}/{name}'
+                archive.write(file['path'],arcname=name)
     except Exception:
         shutil.rmtree(folder,ignore_errors=True);raise
     return files
