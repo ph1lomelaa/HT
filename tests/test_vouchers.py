@@ -243,6 +243,23 @@ def test_flight_schedule_and_ticket(tmp_path):
     assert len(PdfReader(R.generate_pdf_from_png(str(png))).pages)==1
 
 
+@pytest.mark.parametrize('outbound,inbound,destination,return_origin',[
+    ('KC265','KC266','JED','JED'),('KC265','KC264','JED','MED'),
+    ('KC263','KC266','MED','JED'),('KC263','KC264','MED','MED'),
+    ('KC8201','KC8202','JED','JED'),
+])
+def test_website_schedule_preserves_all_legacy_routes(outbound,inbound,destination,return_origin):
+    from pligrim_bot.core.parsers.flight_parser import schedule_options
+    schedule=Sheet([['header'],['20.10.2026',outbound,'08:00','11:00'],['27.10.2026',inbound,'13:00','18:00']])
+    schedule.title='расписание рейсов'
+    source=Sheet([['NIYET 7 DAYS','20/10/2026','27/10/2026']])
+    source.spreadsheet=SimpleNamespace(worksheets=lambda:[schedule])
+    options=schedule_options(source)
+    assert len(options)==1
+    assert options[0]['flight']['outbound']['destination']==destination
+    assert options[0]['flight']['inbound']['origin']==return_origin
+
+
 def test_refresh_keeps_imported_dictionary_references(monkeypatch):
     from datetime import date
     monkeypatch.setattr(settings,'current_date',lambda:date(2026,10,16))

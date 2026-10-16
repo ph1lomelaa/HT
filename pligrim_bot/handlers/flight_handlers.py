@@ -6,15 +6,14 @@ from aiogram import F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
-from pligrim_bot.config.constants import dp,TMP_DIR,PACKAGE_NAMES
+from pligrim_bot.config.constants import dp,TMP_DIR
 from pligrim_bot.config import settings
 from pligrim_bot.config.keyboards import main_scenario_kb,get_palm_month_buttons,button,markup
 from pligrim_bot.data.sessions import SessionCache,callback_ref,resolve_callback
 from pligrim_bot.core.google_sheets import find_worksheet_by_title
-from pligrim_bot.core.utils.date_utils import parse_date
-from pligrim_bot.core.parsers.package_parser import FULL_DATE,kind_from_title
 from pligrim_bot.core.voucher.builder import build_maps_smart,assemble_voucher
 from pligrim_bot.core.voucher.render import generate_ticket,generate_pdf_from_png
+from pligrim_bot.core.parsers.flight_parser import flight_pairs as _flight_pairs
 
 USER_SHEETS_CACHE=SessionCache()
 
@@ -48,19 +47,6 @@ async def sheet_selected(callback):
     ss=await _document(name);sheets=await asyncio.to_thread(ss.worksheets)
     rows=[[button(ws.title[:80],callback_ref('fsheet',name,ws.title))] for ws in sheets if 'расписание' not in ws.title.lower()]
     await callback.message.answer('Выберите лист с пакетами и датами:',reply_markup=markup(rows))
-
-
-def _flight_pairs(rows):
-    pairs=[];package='Все рейсы'
-    for row in rows:
-        label=next((str(c).strip() for c in row if any(p.lower() in str(c).lower() for p in PACKAGE_NAMES)),None)
-        if label:package=label
-        dates=[parse_date(t) for cell in row for t in FULL_DATE.findall(str(cell))]
-        dates=[d for d in dates if d]
-        if len(dates)>=2 and dates[1]>=dates[0]:
-            value=(package,dates[0].strftime('%d.%m.%Y'),dates[1].strftime('%d.%m.%Y'))
-            if value not in pairs:pairs.append(value)
-    return pairs
 
 
 @dp.callback_query(F.data.startswith('fsheet:'))

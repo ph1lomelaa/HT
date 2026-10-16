@@ -64,9 +64,15 @@ class Flight(BaseModel):
     inbound:FlightSegment|None=None
 
 class GenerateRequest(BaseModel):
+    document_type:Literal['voucher','flight']='voucher'
     title:str=Field(default='Индивидуальный ваучер',min_length=1,max_length=200)
-    voucher:Voucher
+    voucher:Voucher|None=None
     background:int=Field(default=0,ge=0,le=2)
     flight:Flight|None=None
     deliver_to_chat:bool=True
     request_id:str=Field(min_length=16,max_length=80,pattern=r'^[a-zA-Z0-9_-]+$')
+    @model_validator(mode='after')
+    def required_document_data(self):
+        if self.document_type=='voucher' and self.voucher is None:raise ValueError('Заполните данные ваучера')
+        if self.document_type=='flight' and self.flight is None:raise ValueError('Заполните данные перелёта')
+        return self

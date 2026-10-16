@@ -84,3 +84,13 @@
 .program-dialog-heading h2{font-size:26px;margin:0 0 7px}.program-dialog-heading p{font-size:11px;line-height:1.7;margin:0;color:#977e5a}.program-dialog-heading .icon-button{min-width:40px;min-height:40px}
 .program-dialog>img{display:block;width:100%;height:auto}
 @media(max-width:760px){.form-grid .field input,.form-grid .field select,.form-grid .field .stay-value{font-size:16px;height:52px;min-height:52px;padding:11px 12px}.room-fields .catalog-picker summary{font-size:16px}.room-occupancy-note{font-size:11px}.design-option{padding:7px;gap:9px}.design-option img{height:108px}.design-option>span{font-size:10px;min-height:4.5em}.program-explanation{padding:14px}.program-dialog-heading{padding:15px}.program-dialog-heading h2{font-size:23px}}
+
+.flight-card{grid-column:1/-1;grid-template-columns:1fr 160px;min-height:185px;background:#f2ebdf}
+.flight-card .card-art>svg{width:65px;height:65px;stroke-width:1;color:#a88d67}
+.home-tools{margin-top:22px}.history-list{display:grid;gap:12px;margin-bottom:24px}
+.history-item{display:flex;align-items:center;gap:16px;text-align:left;width:100%;padding:20px;border:1px solid #ded0ba;border-radius:10px;background:#fcf9f3}
+.history-item>span:nth-child(2){flex:1;min-width:0}.history-item strong{display:block;overflow-wrap:anywhere;font-size:14px;font-weight:500}.history-item small{display:block;font-size:10px;color:#9b815c;margin-top:5px}.history-item>svg{color:#aa906b}
+.schedule-options{display:grid;gap:9px;margin:18px 0}.schedule-options .package-option{width:100%;text-align:left}.schedule-import{padding:16px;border:1px solid #e0d1b8;border-radius:9px;margin:20px 0}
+.flight-review{padding:18px 0;border-bottom:1px solid #e3d8c5}.flight-review h3{font-size:14px;margin:0 0 10px}.flight-review p{font-size:12px;color:#927858;margin-bottom:8px}
+.room-tools{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:20px}.room-tools>div:first-child{display:flex;gap:8px;flex-wrap:wrap}.room-tools>.catalog-field{width:250px;max-width:100%}.room-tools .catalog-picker summary{min-height:43px;font-size:11px}
+@media(max-width:760px){.flight-card{grid-template-columns:1fr 80px;min-height:180px}.flight-card .card-art>svg{width:40px;height:40px}.room-tools{display:grid;grid-template-columns:1fr;gap:12px}.room-tools>.catalog-field{width:100%}.history-item{padding:16px 13px;gap:10px}.history-item strong{font-size:13px}.history-item small{font-size:10px;line-height:1.8}.home-tools .button{width:100%}}

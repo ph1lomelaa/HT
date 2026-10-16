@@ -62,6 +62,8 @@ def test_authentication_required(client):
     assert client.get('/').status_code==200
     assert client.get('/api/me').status_code==401
     assert client.get('/api/catalog').status_code==401
+    assert client.get('/api/jobs').status_code==401
+    assert client.get('/api/flight-options',params={'month':'October 2026','sheet':'Flights'}).status_code==401
     assert client.post('/api/jobs',json=body()).status_code==401
 
 
@@ -166,6 +168,89 @@ def test_expired_voucher_cannot_be_opened_for_editing(client):
     with auth.database() as db:
         db.execute('UPDATE jobs SET created=? WHERE id=?',(time.time()-86401,job['id']))
     assert client.get(f"/api/jobs/{job['id']}/files/0/draft").status_code==404
+
+
+@pytest.mark.parametrize('with_return',[False,True])
+def test_standalone_flight_pdf_without_hotels_and_its_edit_draft(client,with_return):
+    login(client)
+    data=body(flight=True,deliver=True)
+    data.update(document_type='flight',voucher=None,title='FLIGHT ONLY')
+    if with_return:
+        data['flight']['inbound']={**data['flight']['outbound'],'origin':'MED','destination':'ALA',
+                                  'departure_date':'2026-10-27','arrival_date':'2026-10-27'}
+    preview=client.post('/api/preview',json=data)
+    assert preview.status_code==200 and preview.json()['pages']==1
+    job=wait_job(client,client.post('/api/jobs',json=data).json()['id'])
+    assert job['status']=='done' and job['document_type']=='flight' and job['sent']==1
+    assert len(job['files'])==1 and job['files'][0]['pages']==1
+    pdf=client.get(job['files'][0]['download']).content
+    assert len(PdfReader(io.BytesIO(pdf)).pages)==1
+    draft=client.get(f"/api/jobs/{job['id']}/files/0/draft").json()
+    assert draft['document_type']=='flight' and draft['voucher'] is None
+    assert bool(draft['flight']['inbound'])==with_return
+    assert bot.send_document.call_args.kwargs['caption'].startswith('📄 FLIGHT ONLY\n✈️ SCAT DV 499')
+    draft['flight']['outbound']['number']='DV 999';draft['deliver_to_chat']=False
+    corrected=wait_job(client,client.post('/api/jobs',json=draft).json()['id'])
+    assert corrected['status']=='done' and corrected['document_type']=='flight'
+    assert corrected['files'][0]['pages']==1
+    assert client.get(f"/api/jobs/{job['id']}/draft").json()['flight']['outbound']['number']=='DV 499'
+
+
+def test_document_requirements_and_history_owner_isolation(client):
+    login(client)
+    data=body();data['voucher']=None
+    assert client.post('/api/jobs',json=data).status_code==422
+    data['document_type']='flight'
+    assert client.post('/api/jobs',json=data).status_code==422
+    data=body(flight=True);data.update(document_type='flight',voucher=None)
+    first=wait_job(client,client.post('/api/jobs',json=data).json()['id'])
+    second=wait_job(client,client.post('/api/jobs',json=body()).json()['id'])
+    history=client.get('/api/jobs').json()['jobs']
+    assert [entry['id'] for entry in history]==[second['id'],first['id']]
+    assert history[0]['document_type']=='voucher' and history[1]['document_type']=='flight'
+    assert all('payload' not in entry and 'path' not in entry for entry in history)
+    draft=client.get(f"/api/jobs/{first['id']}/draft").json()
+    assert draft['document_type']=='flight' and draft['request_id']!=data['request_id']
+    with auth.database() as db:
+        db.execute('UPDATE jobs SET created=? WHERE id=?',(time.time()-86401,first['id']))
+    assert [entry['id'] for entry in client.get('/api/jobs').json()['jobs']]==[second['id']]
+    assert client.get(f"/api/jobs/{first['id']}/draft").status_code==404
+    login(client,999)
+    assert client.get('/api/jobs').json()['jobs']==[]
+    assert client.get(f"/api/jobs/{second['id']}/draft").status_code==404
+
+
+def test_saved_batch_draft_can_be_reopened_without_chat(client):
+    login(client)
+    data=body();data['voucher']['people']['rooms'].append({'kind':'SGL','people':['SMIRNOV EGOR'],'adults':1})
+    job=wait_job(client,client.post('/api/jobs',json=data).json()['id'])
+    draft=client.get(f"/api/jobs/{job['id']}/draft").json()
+    assert len(draft['voucher']['people']['rooms'])==2
+    assert draft['request_id']!=data['request_id']
+
+
+def test_flight_options_from_same_schedule_as_legacy_chat(client,monkeypatch):
+    from types import SimpleNamespace
+    login(client)
+    schedule=SimpleNamespace(title='расписание рейсов',get_all_values=lambda:[
+        ['header'],['20.10.2026','KC263','08:00','11:00'],['27.10.2026','KC266','13:00','18:00']])
+    source=SimpleNamespace(get_all_values=lambda:[['NIYET 7 DAYS','20/10/2026','27/10/2026']],
+                           spreadsheet=SimpleNamespace(worksheets=lambda:[schedule]))
+    monkeypatch.setattr(web,'snapshot',lambda *args:source)
+    response=client.get('/api/flight-options',params={'month':'October 2026','sheet':'Flights'})
+    assert response.status_code==200
+    options=response.json()['options'];assert len(options)==1
+    flight=options[0]['flight']
+    assert flight['outbound']['number']=='KC263' and flight['outbound']['destination']=='MED'
+    assert flight['inbound']['number']=='KC266' and flight['inbound']['origin']=='JED'
+    assert flight['inbound']['departure_date']=='2026-10-27'
+    data={'document_type':'flight','flight':flight,'title':options[0]['title'],'request_id':uuid.uuid4().hex,'deliver_to_chat':False}
+    assert wait_job(client,client.post('/api/jobs',json=data).json()['id'])['status']=='done'
+    source.spreadsheet=SimpleNamespace(worksheets=lambda:[])
+    assert client.get('/api/flight-options',params={'month':'October 2026','sheet':'Flights'}).status_code==400
+    def unavailable(*args):raise ConnectionError('offline')
+    monkeypatch.setattr(web,'snapshot',unavailable)
+    assert client.get('/api/flight-options',params={'month':'October 2026','sheet':'Flights'}).status_code==503
 
 
 def test_retry_preserves_room_caption(client):

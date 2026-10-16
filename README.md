@@ -3,6 +3,7 @@
 Telegram bot for passenger and flight vouchers from Google Sheets.
 
 Staff instructions (Russian, ready to forward): [HICKMET_USER_GUIDE_RU.txt](docs/HICKMET_USER_GUIDE_RU.txt).
+Chat-to-website coverage: [WORKFLOW_PARITY.md](docs/WORKFLOW_PARITY.md).
 
 Generated PDFs can be individually edited from the result page or the Telegram
 button below each newly sent PDF. The editor loads only that document's room
@@ -69,9 +70,11 @@ shown; other airlines need an explicit route mapping before use.
 ```sh
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest -q tests
+node --test tests/test_web_workflows.cjs
 ```
 
 Tests use generated data and mock Telegram delivery, without Google requests.
+Node.js is needed only for the client workflow checks, not for the production containers.
 
 ## Telegram Mini App and website
 
@@ -79,6 +82,11 @@ The web interface supports package selection, manual vouchers, guest/room edits,
 hotels, services, optional flight pages, preview, PDF/ZIP downloads, and delivery
 to the authenticated user's Telegram chat. Manual flight fields accept any airline.
 The older chat flight flow uses the Air Astana mappings described above.
+The separate flight card creates a one-page PDF from the same Google schedule
+as the chat or from manually entered flight details. It requires no hotels/rooms.
+Passenger vouchers can also import the selected group's schedule into their optional
+flight page. My documents lists the authenticated user's latest 50 jobs within 24 hours,
+including standalone flights, downloads, retries, single-file edits and full draft recovery.
 
 Run the web process alongside the bot:
 

@@ -21,6 +21,7 @@ from pligrim_bot.core.voucher.render import AVAILABLE_BACKGROUNDS,render_voucher
 from pligrim_bot.core.voucher.validation import voucher_errors
 from . import auth,service
 from .models import GenerateRequest
+from pligrim_bot.core.parsers.flight_parser import schedule_options
 
 STATIC=Path(__file__).parent/'static'
 logger=logging.getLogger(__name__)
@@ -178,6 +179,18 @@ async def packages(month:str,sheet:str,person=Depends(user)):
     return {'packages':await asyncio.to_thread(load)}
 
 
+@app.get('/api/flight-options')
+async def flight_options(month:str,sheet:str,person=Depends(user)):
+    def load():
+        with settings._lock:return schedule_options(snapshot(month,sheet))
+    try:options=await asyncio.to_thread(load)
+    except ValueError:raise
+    except Exception:
+        logger.exception('Flight schedule unavailable')
+        raise HTTPException(503,'Не удалось загрузить расписание. Введите рейсы вручную или повторите попытку.') from None
+    return {'options':options,'notice':'Проверьте даты прилёта: в расписании дата может быть указана только для вылета.'}
+
+
 class PackageSelection(BaseModel):
     month:str=Field(max_length=80)
     sheet:str=Field(max_length=300)
@@ -205,6 +218,11 @@ async def design(index:int):
 @app.post('/api/preview')
 async def preview(data:GenerateRequest,person=Depends(user)):
     def render():
+        if data.document_type=='flight':
+            from .service import render_flight_page
+            with render_flight_page(data.flight.model_dump(mode='json')) as image:
+                image.thumbnail((700,1100));buf=io.BytesIO();image.save(buf,'JPEG',quality=85)
+            return base64.b64encode(buf.getvalue()).decode()
         v=service.prepared(data);room=v['people']['rooms'][0]
         payload=base_payload_from(v);payload['pilgrims']=room['people']
         from pligrim_bot.core.parsers.people_parser import human_room
@@ -217,7 +235,7 @@ async def preview(data:GenerateRequest,person=Depends(user)):
                 image.thumbnail((700,1100));buf=io.BytesIO();image.convert('RGB').save(buf,'JPEG',quality=85)
             return base64.b64encode(buf.getvalue()).decode()
         finally:Path(png).unlink(missing_ok=True)
-    return {'image':'data:image/jpeg;base64,'+await asyncio.to_thread(render),'pages':3 if data.flight else 2}
+    return {'image':'data:image/jpeg;base64,'+await asyncio.to_thread(render),'pages':1 if data.document_type=='flight' else 3 if data.flight else 2}
 
 
 @app.post('/api/jobs')
@@ -231,9 +249,26 @@ async def create(data:GenerateRequest,person=Depends(user)):
 async def job_status(key:str,person=Depends(user)):
     job=await asyncio.to_thread(service.get_job,key,person['id'])
     if not job:raise HTTPException(404,'Документы не найдены')
+    payload=json.loads(job['payload'])
     return {'id':key,'status':job['status'],'sent':job['sent'],'error':job['error'],
+            'title':payload['title'],'document_type':payload.get('document_type','voucher'),'deliver_to_chat':payload.get('deliver_to_chat',True),
             'files':[{'name':f['name'],'pages':f['pages'],'download':f'/api/jobs/{key}/files/{i}'} for i,f in enumerate(job['files'])],
             'archive':f'/api/jobs/{key}/download' if job['files'] else None}
+
+
+@app.get('/api/jobs')
+async def jobs(person=Depends(user)):
+    return {'jobs':await asyncio.to_thread(service.list_jobs,person['id'])}
+
+
+@app.get('/api/jobs/{key}/draft')
+async def edit_job_draft(key:str,person=Depends(user)):
+    import uuid
+    job=await asyncio.to_thread(service.get_job,key,person['id'])
+    if not job:raise HTTPException(404,'Оформление не найдено или срок хранения истёк')
+    draft=GenerateRequest.model_validate_json(job['payload'])
+    draft.request_id=uuid.uuid4().hex
+    return draft.model_dump(mode='json')
 
 
 @app.post('/api/jobs/{key}/retry')
@@ -248,8 +283,9 @@ async def edit_document_draft(key:str,index:int,person=Depends(user)):
     if not job or index<0 or index>=len(job['files']):
         raise HTTPException(404,'Ваучер не найден или срок редактирования истёк. Выберите пакет заново.')
     draft=GenerateRequest.model_validate_json(job['payload'])
-    if index>=len(draft.voucher.people.rooms):raise HTTPException(404,'Ваучер не найден')
-    draft.voucher.people.rooms=[draft.voucher.people.rooms[index].model_copy(deep=True)]
+    if draft.document_type=='voucher':
+        if index>=len(draft.voucher.people.rooms):raise HTTPException(404,'Ваучер не найден')
+        draft.voucher.people.rooms=[draft.voucher.people.rooms[index].model_copy(deep=True)]
     draft.request_id=uuid.uuid4().hex
     return draft.model_dump(mode='json')
 

@@ -11,7 +11,7 @@ from aiogram.types import FSInputFile,InlineKeyboardButton,InlineKeyboardMarkup,
 from urllib.parse import urlencode
 from pligrim_bot.config.constants import bot
 from pligrim_bot.core.voucher.builder import base_payload_from,ensure_chronological_city_order
-from pligrim_bot.core.voucher.render import render_voucher_page1_png,build_voucher_pdf,build_filename_from_payload
+from pligrim_bot.core.voucher.render import render_voucher_page1_png,build_voucher_pdf,build_filename_from_payload,render_flight_page,slugify_filename_part
 from pligrim_bot.core.voucher.validation import require_valid_voucher
 from pligrim_bot.core.parsers.people_parser import human_room
 from pligrim_bot.core.voucher.caption import voucher_caption
@@ -30,11 +30,25 @@ def edit_document_button(key,index):
 
 
 def prepared(request):
+    if request.document_type=='flight':return None
     v=request.voucher.model_dump()
     v['people']['flat']=[n for r in v['people']['rooms'] for n in r['people']]
     for room in v['people']['rooms']:room['count']=len(room['people'])
     ensure_chronological_city_order(v);require_valid_voucher(v)
     return v
+
+
+def list_jobs(owner):
+    with database() as db:
+        rows=db.execute('SELECT id,status,sent,created,payload,files FROM jobs WHERE owner=? AND created>? ORDER BY created DESC LIMIT 50',
+                        (owner,time.time()-86400)).fetchall()
+    result=[]
+    for row in rows:
+        payload=json.loads(row['payload'])
+        result.append({'id':row['id'],'status':row['status'],'sent':row['sent'],'created':row['created'],
+                       'title':payload['title'],'document_type':payload.get('document_type','voucher'),
+                       'files':len(json.loads(row['files']))})
+    return result
 
 
 def create_job(owner,request):
@@ -70,20 +84,30 @@ def render_documents(key,request):
     folder=state_dir()/'jobs'/key;folder.mkdir(parents=True,exist_ok=True)
     files=[]
     try:
-        for index,room in enumerate(voucher['people']['rooms'],1):
-            payload=base_payload_from(voucher);payload['pilgrims']=room['people']
-            for slot in (1,2):
-                if payload.get(f'city{slot}'):payload[f'room{slot}']=human_room(room['kind'])
-            png=render_voucher_page1_png(payload)
-            try:
-                path=folder/f'{index}.pdf'
-                build_voucher_pdf(png,payload.get('city1'),payload.get('transfer'),str(path),request.background,
-                                  request.flight.model_dump(mode='json') if request.flight else None)
-            finally:
-                if os.path.exists(png):os.unlink(png)
-            name=f'{index:02d}_{build_filename_from_payload(payload)}.pdf'
-            files.append({'name':name,'path':str(path),'pages':3 if request.flight else 2,'people':len(room['people']),
-                          'caption':voucher_caption(request.title,room)})
+        if request.document_type=='flight':
+            image=render_flight_page(request.flight.model_dump(mode='json'))
+            path=folder/'1.pdf'
+            try:image.save(path,'PDF',resolution=150)
+            finally:image.close()
+            name=f"Hickmet_flight_{slugify_filename_part(request.title)[:60] or 'voucher'}.pdf"
+            legs=[request.flight.outbound]+([request.flight.inbound] if request.flight.inbound else [])
+            caption='📄 '+request.title+'\n'+'\n'.join(f'✈️ {leg.airline} {leg.number} · {leg.origin} → {leg.destination}' for leg in legs)
+            files.append({'name':name,'path':str(path),'pages':1,'people':0,'caption':caption[:1000]})
+        else:
+            for index,room in enumerate(voucher['people']['rooms'],1):
+                payload=base_payload_from(voucher);payload['pilgrims']=room['people']
+                for slot in (1,2):
+                    if payload.get(f'city{slot}'):payload[f'room{slot}']=human_room(room['kind'])
+                png=render_voucher_page1_png(payload)
+                try:
+                    path=folder/f'{index}.pdf'
+                    build_voucher_pdf(png,payload.get('city1'),payload.get('transfer'),str(path),request.background,
+                                      request.flight.model_dump(mode='json') if request.flight else None)
+                finally:
+                    if os.path.exists(png):os.unlink(png)
+                name=f'{index:02d}_{build_filename_from_payload(payload)}.pdf'
+                files.append({'name':name,'path':str(path),'pages':3 if request.flight else 2,'people':len(room['people']),
+                              'caption':voucher_caption(request.title,room)})
         with zipfile.ZipFile(folder/'vouchers.zip','w',zipfile.ZIP_DEFLATED) as archive:
             for file in files:archive.write(file['path'],arcname=file['name'])
     except Exception:
