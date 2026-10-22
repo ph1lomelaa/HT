@@ -52,6 +52,30 @@ def login(client,user=101):
     return response
 
 
+@pytest.mark.parametrize('index,filename',[(0,'use-med 20.png'),(2,'uae-mec 20.png')])
+def test_baggage_job_preview_and_saved_draft(client,tmp_path,monkeypatch,index,filename):
+    from PIL import Image
+    from pligrim_bot.core.voucher import render as R
+    monkeypatch.setattr(R,'IMAGES_DIR',str(tmp_path))
+    login(client)
+    payload=body();payload.update(background=index,baggage='5_20')
+    # A missing asset must fail before creating a render job.
+    missing=client.post('/api/jobs',json=payload)
+    assert missing.status_code==400 and 'ещё не загружена' in missing.text
+    Image.new('RGB',(100,150),'red').save(tmp_path/filename)
+    response=client.get(f'/api/designs/{index}?baggage=5_20')
+    assert response.status_code==200 and response.content==(tmp_path/filename).read_bytes()
+    assert client.post('/api/preview',json=payload).status_code==200
+    response=client.post('/api/jobs',json=payload)
+    assert response.status_code==200,response.text
+    key=response.json()['id'];job=wait_job(client,key)
+    assert job['status']=='done',job
+    draft=client.get(f'/api/jobs/{key}/files/0/draft').json()
+    assert draft['baggage']=='5_20' and draft['background']==index
+    payload['baggage']='5'
+    assert client.post('/api/jobs',json=payload).status_code==422
+
+
 def wait_job(client,key):
     for _ in range(150):
         job=client.get('/api/jobs/'+key).json()

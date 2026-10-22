@@ -18,6 +18,20 @@ function run(script) {
   return vm.runInContext(`(async()=>{render=()=>{};notify=()=>{};state.user={id:101};${script}})()`, context);
 }
 
+test('baggage selection controls preview and payload and survives saved draft editing', () => run(`
+  state.mode='manual';state.baggage='5_20';state.background=2;
+  if(requestBody().baggage!=='5_20'||!programImageUrl(2).includes('5_20'))throw Error('Baggage not propagated');
+  if(!renderReview().includes('Ручная кладь 5 кг + багаж 20 кг'))throw Error('Baggage absent from review');
+  const draft={...requestBody(),document_type:'voucher'};
+  state.baggage='8_23';applySavedDraft(draft,{key:'saved',index:0});
+  if(state.baggage!=='5_20')throw Error('Saved baggage lost');
+  state.background=1;
+  if(renderBaggage()!==''||requestBody().baggage!=='8_23'||!programImageUrl(1).includes('8_23'))throw Error('Train baggage changed');
+  state.background=0;if(state.baggage!=='5_20')throw Error('Selection lost after switching designs');
+  delete draft.baggage;applySavedDraft(draft,{key:'old',index:0});
+  if(state.baggage!=='8_23')throw Error('Legacy draft default changed');
+`));
+
 test('standalone flight skips rooms and hotels and supports back navigation', () => run(`
   loadCatalog=async()=>{};loadPreview=async()=>{};
   await start('flight');state.flightSource='manual';state.returnFlight=false;

@@ -65,6 +65,25 @@ Flight vouchers use a sheet with package labels and two full dates, plus
 codes: KC263/264/265/266/8201/8202. Only matching routes from the schedule are
 shown; other airlines need an explicit route mapping before use.
 
+## Baggage on the second voucher page
+
+For the Medina bus and Mecca programs, managers select a complete allowance:
+hand baggage 8 kg + checked baggage 23 kg, or hand baggage 5 kg + checked
+baggage 20 kg. The website review, second-page preview, PDF and saved drafts
+use the same selection. The Telegram bot asks after choosing the program.
+The train program keeps its existing page.
+
+Images belong in `pligrim_bot/assets/images/`:
+
+| Program | 8 + 23 kg | 5 + 20 kg |
+| --- | --- | --- |
+| Medina bus | `uae-med.png` | `uae-med 20.png` (also accepts `use-med 20.png`) |
+| Mecca | `uae-mec.png` | `uae-mec 20.png` |
+
+Upload the two 20 kg images before using that allowance. If an image is
+missing, generation reports an error rather than substituting the 23 kg page.
+Existing saved requests without a baggage selection default to 8 + 23 kg.
+
 ## Tests
 
 ```sh

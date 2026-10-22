@@ -68,6 +68,7 @@ class GenerateRequest(BaseModel):
     title:str=Field(default='Индивидуальный ваучер',min_length=1,max_length=200)
     voucher:Voucher|None=None
     background:int=Field(default=0,ge=0,le=2)
+    baggage:Literal['8_23','5_20']='8_23'
     flight:Flight|None=None
     deliver_to_chat:bool=True
     request_id:str=Field(min_length=16,max_length=80,pattern=r'^[a-zA-Z0-9_-]+$')

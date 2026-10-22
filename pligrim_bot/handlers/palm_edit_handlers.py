@@ -59,7 +59,8 @@ async def send_one_voucher_for_group(message,pkg_title,voucher,base,group,idx,bg
     def render(folder):
         png=render_voucher_page1_png(data)
         try:
-            return build_voucher_pdf(png,data.get('city1'),data.get('transfer'),os.path.join(folder,'voucher.pdf'),bg_index)
+            return build_voucher_pdf(png,data.get('city1'),data.get('transfer'),os.path.join(folder,'voucher.pdf'),bg_index,
+                                     baggage=effective.get('baggage','8_23'))
         finally:
             if os.path.exists(png):os.unlink(png)
     with tempfile.TemporaryDirectory(prefix='voucher-',dir=TMP_DIR) as folder:

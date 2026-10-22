@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from aiogram import F, types
-from aiogram.types import InputMediaPhoto, FSInputFile
+from aiogram.types import InputMediaPhoto, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from pligrim_bot.config.constants import dp, PREVIEW_CACHE, EDIT_STATE
 from pligrim_bot.config import settings
 from pligrim_bot.config.keyboards import get_palm_month_buttons,get_palm_sheet_buttons,build_palm_packages_kb,preview_main_kb,choose_background_kb
@@ -10,7 +10,7 @@ from pligrim_bot.core.google_sheets import find_worksheet_by_title
 from pligrim_bot.core.parsers.package_parser import find_palm_packages,collect_voucher_by_package
 from pligrim_bot.core.voucher.builder import base_payload_from
 from pligrim_bot.core.voucher.validation import require_valid_voucher
-from pligrim_bot.core.voucher.render import AVAILABLE_BACKGROUNDS
+from pligrim_bot.core.voucher.render import AVAILABLE_BACKGROUNDS, page2_background
 from pligrim_bot.handlers.palm_edit_handlers import send_one_voucher_for_group,start_after_voucher_menu
 
 
@@ -106,7 +106,37 @@ async def on_background_selected(call):
         await call.answer('Ваучеры уже отправлены. Используйте меню редактирования.');return
     if data.get('sending'):
         await call.answer('Документы уже формируются');return
+    if index != 1:
+        await call.answer()
+        rows=[[InlineKeyboardButton(text=label,callback_data=f'sel_bag:{key}:{index}:{value}')]
+              for value,label in [('8_23','Ручная кладь 8 кг + багаж 23 кг'),('5_20','Ручная кладь 5 кг + багаж 20 кг')]]
+        rows.append([InlineKeyboardButton(text='Назад к выбору страницы',callback_data=f'pv_send:{key}')])
+        await call.message.answer('Выберите норму багажа:',reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        return
+    await _send_selected(call,key,data,index,'8_23')
+
+
+@dp.callback_query(F.data.startswith('sel_bag:'))
+async def on_baggage_selected(call):
+    _,key,index,baggage=call.data.split(':')
+    data=_owned(call,key);index=int(index)
+    if index not in (0,2) or baggage not in {'8_23','5_20'}:
+        await call.answer('Неизвестная норма багажа',show_alert=True);return
+    await _send_selected(call,key,data,index,baggage)
+
+
+async def _send_selected(call,key,data,index,baggage):
+    if data.get('sent') or data.get('sending'):
+        await call.answer('Документы уже формируются или отправлены');return
+    selection=(index,baggage)
+    if data.get('sent_groups') and data.get('selection')!=selection:
+        await call.answer('Часть ваучеров уже отправлена. Продолжите с прежней страницей и нормой багажа.',show_alert=True);return
+    try:page2_background(index,baggage)
+    except ValueError as exc:
+        await call.answer(str(exc),show_alert=True);return
     require_valid_voucher(data['voucher'])
+    data['voucher']['baggage']=baggage
+    data['selection']=selection
     data['sending']=True
     await call.answer('Формирую документы…')
     try:

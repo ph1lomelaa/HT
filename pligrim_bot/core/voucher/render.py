@@ -28,6 +28,25 @@ AVAILABLE_BACKGROUNDS = [
     UAE_MEC_PATH        # Индекс 2
 ]
 
+def page2_background(index: int, baggage: str = '8_23') -> str:
+    """Resolve a program and its complete cabin/checked baggage allowance."""
+    if baggage not in {'8_23', '5_20'}:
+        raise ValueError('Выберите норму багажа: 8 + 23 кг или 5 + 20 кг')
+    if index not in range(len(AVAILABLE_BACKGROUNDS)):
+        raise ValueError('Неизвестная программа поездки')
+    path = AVAILABLE_BACKGROUNDS[index]
+    if index == 1 or baggage == '8_23':
+        return path
+    stem = 'uae-med' if index == 0 else 'uae-mec'
+    candidates = [os.path.join(IMAGES_DIR, stem + ' 20.png')]
+    if index == 0:
+        candidates.append(os.path.join(IMAGES_DIR, 'use-med 20.png'))
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    raise ValueError('Страница с ручной кладью 5 кг и багажом 20 кг ещё не загружена')
+
+
 def pick_page2_bg(city1: str | None, transfer_raw: str | None) -> str:
     """Выбирает правильный фон для второй страницы (автоматически)"""
     c = (city1 or "").strip().lower()
@@ -150,17 +169,19 @@ def load_font(size):
 
 # --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ---
 def build_voucher_pdf(page1_png: str, city1: str | None, transfer_raw: str | None,
-                      out_pdf_path: str, bg_index: int = -1, flight_data: dict | None = None) -> str:
+                      out_pdf_path: str, bg_index: int = -1, flight_data: dict | None = None,
+                      baggage: str = '8_23') -> str:
     """
     Создает 2-страничный PDF ваучера.
     :param bg_index: Номер фона (0, 1, 2). Если -1, выбирает авто.
     """
     if 0 <= bg_index < len(AVAILABLE_BACKGROUNDS):
         # Берем фон по выбору пользователя
-        page2_bg = AVAILABLE_BACKGROUNDS[bg_index]
+        page2_bg = page2_background(bg_index, baggage)
     else:
         # Автовыбор (старая логика)
-        page2_bg = pick_page2_bg(city1, transfer_raw)
+        auto_bg = pick_page2_bg(city1, transfer_raw)
+        page2_bg = page2_background(AVAILABLE_BACKGROUNDS.index(auto_bg), baggage)
 
     with Image.open(page1_png) as source1, Image.open(page2_bg) as source2:
         p1, p2 = source1.convert("RGB"), source2.convert("RGB")

@@ -17,7 +17,7 @@ from pligrim_bot.config.constants import bot,TTF_REGULAR
 from pligrim_bot.core.google_sheets import get_palm_sheet_names,find_worksheet_by_title
 from pligrim_bot.core.parsers.package_parser import find_palm_packages,collect_voucher_by_package
 from pligrim_bot.core.voucher.builder import base_payload_from
-from pligrim_bot.core.voucher.render import AVAILABLE_BACKGROUNDS,render_voucher_page1_png
+from pligrim_bot.core.voucher.render import AVAILABLE_BACKGROUNDS,render_voucher_page1_png,page2_background
 from pligrim_bot.core.voucher.validation import voucher_errors
 from . import auth,service
 from .models import GenerateRequest
@@ -210,9 +210,11 @@ async def select_package(data:PackageSelection,person=Depends(user)):
 
 
 @app.get('/api/designs/{index}')
-async def design(index:int):
+async def design(index:int,baggage:str='8_23'):
     if index not in range(3):raise HTTPException(404)
-    return FileResponse(AVAILABLE_BACKGROUNDS[index],media_type='image/png',headers={'Cache-Control':'public, max-age=86400'})
+    try:path=page2_background(index,baggage)
+    except ValueError as exc:raise HTTPException(400,str(exc)) from exc
+    return FileResponse(path,media_type='image/png',headers={'Cache-Control':'public, max-age=86400'})
 
 
 @app.post('/api/preview')

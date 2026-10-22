@@ -191,9 +191,41 @@ def test_owner_and_incomplete_send(isolate):
     async def run():
         C.PREVIEW_CACHE['owned']={'owner_id':101,'chat_id':101,'voucher':voucher(),'pkg_title':'AUDIT'}
         await PV.pv_cancel(call('pv_cancel:owned',999));assert C.PREVIEW_CACHE.get('owned')
-        await H.on_background_selected(call('sel_bg:owned:0',101));assert isolate.docs.await_count==1
+        await H.on_background_selected(call('sel_bg:owned:0',101));assert isolate.docs.await_count==0
+        await H.on_baggage_selected(call('sel_bag:owned:0:8_23',101));assert isolate.docs.await_count==1
         with pytest.raises(ValueError):await H.send_vouchers_for_package(msg(),'EMPTY',{'people':{'rooms':[]}},0)
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('index,filename',[(0,'uae-med 20.png'),(0,'use-med 20.png'),(2,'uae-mec 20.png')])
+def test_baggage_pdf_and_telegram_selection(isolate,tmp_path,monkeypatch,index,filename):
+    monkeypatch.setattr(R,'IMAGES_DIR',str(tmp_path))
+    Image.new('RGB',(100,150),'red').save(tmp_path/filename)
+    assert R.page2_background(index,'5_20')==str(tmp_path/filename)
+    assert R.page2_background(index,'8_23')==R.AVAILABLE_BACKGROUNDS[index]
+    first=tmp_path/'first.png';Image.new('RGB',(100,150),'white').save(first)
+    output=tmp_path/'test.pdf'
+    R.build_voucher_pdf(str(first),'Madinah','Автобус',str(output),index,baggage='5_20')
+    pdf=PdfReader(output)
+    assert len(pdf.pages)==2
+    pixel=pdf.pages[1].images[0].image.convert('RGB').getpixel((50,75))
+    assert pixel[0]>240 and pixel[1]<15 and pixel[2]<15
+    async def run():
+        C.PREVIEW_CACHE['bag']={'owner_id':101,'chat_id':101,'voucher':voucher(),'pkg_title':'AUDIT'}
+        await H.on_background_selected(call(f'sel_bg:bag:{index}'))
+        assert isolate.docs.await_count==0
+        await H.on_baggage_selected(call(f'sel_bag:bag:{index}:5_20'))
+        assert isolate.docs.await_count==1
+        assert E.EDIT_SESSIONS[101]['voucher']['baggage']=='5_20'
+    asyncio.run(run())
+
+
+def test_missing_baggage_image_and_train(isolate,tmp_path,monkeypatch):
+    monkeypatch.setattr(R,'IMAGES_DIR',str(tmp_path))
+    for index in (0,2):
+        with pytest.raises(ValueError,match='ещё не загружена'):R.page2_background(index,'5_20')
+    assert R.page2_background(1,'5_20')==R.JED_MED_TRAIN_PATH
+    with pytest.raises(ValueError):R.page2_background(0,'20')
 
 
 def test_group_edits_are_isolated_and_files_cleaned(isolate,tmp_path):
@@ -230,6 +262,8 @@ def test_full_package_dispatcher_flow(isolate,monkeypatch):
         key=next(iter(C.PREVIEW_CACHE))
         await C.dp.feed_update(C.bot,Update(update_id=2,callback_query=call(f'pv_send:{key}')))
         await C.dp.feed_update(C.bot,Update(update_id=3,callback_query=call(f'sel_bg:{key}:2')))
+        assert isolate.docs.await_count==0
+        await C.dp.feed_update(C.bot,Update(update_id=4,callback_query=call(f'sel_bag:{key}:2:8_23')))
         assert isolate.docs.await_count==1
     asyncio.run(run())
 

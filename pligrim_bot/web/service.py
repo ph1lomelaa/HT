@@ -12,7 +12,7 @@ from aiogram.types import FSInputFile,InlineKeyboardButton,InlineKeyboardMarkup,
 from urllib.parse import urlencode
 from pligrim_bot.config.constants import bot
 from pligrim_bot.core.voucher.builder import base_payload_from,ensure_chronological_city_order
-from pligrim_bot.core.voucher.render import render_voucher_page1_png,build_voucher_pdf,build_filename_from_payload,render_flight_page,slugify_filename_part
+from pligrim_bot.core.voucher.render import render_voucher_page1_png,build_voucher_pdf,build_filename_from_payload,render_flight_page,slugify_filename_part,page2_background
 from pligrim_bot.core.voucher.validation import require_valid_voucher
 from pligrim_bot.core.parsers.people_parser import human_room
 from pligrim_bot.core.voucher.caption import voucher_caption
@@ -32,6 +32,7 @@ def edit_document_button(key,index):
 
 def prepared(request):
     if request.document_type=='flight':return None
+    page2_background(request.background,request.baggage)
     v=request.voucher.model_dump()
     v['people']['flat']=[n for r in v['people']['rooms'] for n in r['people']]
     for room in v['people']['rooms']:room['count']=len(room['people'])
@@ -103,7 +104,8 @@ def render_documents(key,request):
                 try:
                     path=folder/f'{index}.pdf'
                     build_voucher_pdf(png,payload.get('city1'),payload.get('transfer'),str(path),request.background,
-                                      request.flight.model_dump(mode='json') if request.flight else None)
+                                      request.flight.model_dump(mode='json') if request.flight else None,
+                                      baggage=request.baggage)
                 finally:
                     if os.path.exists(png):os.unlink(png)
                 name=f'{build_filename_from_payload(payload)}.pdf'
